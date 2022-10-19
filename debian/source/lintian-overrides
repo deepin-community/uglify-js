@@ -1,0 +1,11 @@
+# License is in Reference field (see bug#786450)
+missing-license-paragraph-in-dep5-copyright debian/copyright gpl-3\+ *
+missing-license-text-in-dep5-copyright debian/copyright GPL-3\+ *
+
+# False positive, just unusually long code lines in source
+source-is-missing test/compress/classes.js line 220 is 495 characters long (>256)
+source-is-missing test/input/issue-1482/default.js line 0 is 339 characters long (>256)
+source-is-missing test/input/issue-3040/input.js line 3 is 416 characters long (>256)
+source-is-missing test/mocha/cli.js line 122 is 275 characters long (>256)
+source-is-missing test/mocha/sourcemaps.js line 202 is 291 characters long (>256)
+source-is-missing test/ufuzz/index.js line 4 is 257 characters long (>256)
