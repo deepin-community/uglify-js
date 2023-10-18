@@ -318,6 +318,32 @@ unsafe_string_replace: {
     expect_stdout: "PASS"
 }
 
+unsafe_Object_call: {
+    options = {
+        side_effects: true,
+        unsafe: true,
+    }
+    input: {
+        var o = {
+            f: function(a) {
+                console.log(a ? this.p : "FAIL 1");
+            },
+            p: "FAIL 2",
+        }, p = "PASS";
+        Object(o.f)(42);
+    }
+    expect: {
+        var o = {
+            f: function(a) {
+                console.log(a ? this.p : "FAIL 1");
+            },
+            p: "FAIL 2",
+        }, p = "PASS";
+        (0, o.f)(42);
+    }
+    expect_stdout: "PASS"
+}
+
 drop_value: {
     options = {
         side_effects: true,
@@ -617,7 +643,7 @@ issue_4730_2: {
     }
     expect: {
         var a;
-        !console.log("PASS") || a && a[a.p];
+        console.log("PASS") && a && a[a.p];
     }
     expect_stdout: "PASS"
 }
@@ -642,6 +668,59 @@ issue_4751: {
             },
         };
         o && o.p;
+    }
+    expect_stdout: "PASS"
+}
+
+drop_instanceof: {
+    options = {
+        side_effects: true,
+    }
+    input: {
+        42 instanceof function() {};
+        console.log("PASS");
+    }
+    expect: {
+        console.log("PASS");
+    }
+    expect_stdout: "PASS"
+}
+
+drop_instanceof_reference: {
+    options = {
+        reduce_vars: true,
+        side_effects: true,
+        toplevel: true,
+    }
+    input: {
+        function f() {}
+        42 instanceof f;
+        console.log("PASS");
+    }
+    expect: {
+        function f() {}
+        console.log("PASS");
+    }
+    expect_stdout: "PASS"
+}
+
+retain_instanceof: {
+    options = {
+        side_effects: true,
+    }
+    input: {
+        try {
+            42 instanceof "foo";
+        } catch (e) {
+            console.log("PASS");
+        }
+    }
+    expect: {
+        try {
+            0 instanceof "foo";
+        } catch (e) {
+            console.log("PASS");
+        }
     }
     expect_stdout: "PASS"
 }

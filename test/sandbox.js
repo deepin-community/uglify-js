@@ -25,17 +25,16 @@ exports.run_code = semver.satisfies(process.version, "0.8") ? function(code, top
     } while (prev !== stdout);
     return stdout;
 } : semver.satisfies(process.version, "<0.12") ? run_code_vm : function(code, toplevel, timeout) {
-    if ([
-        /\basync[ \t]*\([\s\S]*?\)[ \t]*=>/,
+    var stdout = ([
         /\b(async[ \t]+function|Promise|setImmediate|setInterval|setTimeout)\b/,
-        /\basync([ \t]+|[ \t]*#|[ \t]*\*[ \t]*)[^\s()[\]{}#,.&|!~=*%/+-]+(\s*\(|[ \t]*=>)/,
+        /\basync([ \t]+|[ \t]*#)[^\s()[\]{}#:;,.&|!~=*%/+-]+(\s*\(|[ \t]*=>)/,
+        /\basync[ \t]*\*[ \t]*[^\s()[\]{}#:;,.&|!~=*%/+-]+\s*\(/,
+        /\basync([ \t]*\*)?[ \t]*\[[\s\S]*?\]\s*\(/,
+        /\basync[ \t]*\([\s\S]*?\)[ \t]*=>/,
     ].some(function(pattern) {
         return pattern.test(code);
-    })) {
-        return run_code_exec(code, toplevel, timeout);
-    } else {
-        return run_code_vm(code, toplevel, timeout);
-    }
+    }) ? run_code_exec : run_code_vm)(code, toplevel, timeout);
+    return stdout.length > 1000 ? stdout.slice(0, 1000) + "…《" + stdout.length + "》" : stdout;
 };
 exports.same_stdout = semver.satisfies(process.version, "0.12") ? function(expected, actual) {
     if (typeof expected != typeof actual) return false;
@@ -50,11 +49,19 @@ exports.same_stdout = semver.satisfies(process.version, "0.12") ? function(expec
     return typeof expected == typeof actual && strip_func_ids(expected) == strip_func_ids(actual);
 };
 exports.patch_module_statements = function(code) {
-    var count = 0, imports = [];
-    code = code.replace(/\bexport(?:\s*\{[^{}]*}\s*?(?:$|\n|;)|\s+default\b(?:\s*(\(|\{|class\s*\{|class\s+(?=extends\b)|(?:async\s+)?function\s*(?:\*\s*)?\())?|\b)/g, function(match, header) {
+    var count = 0, has_default = "", imports = [], strict_mode = "";
+    code = code.replace(/^\s*("|')use strict\1\s*;?/, function(match) {
+        strict_mode = match;
+        return "";
+    }).replace(/\bexport(?:\s*\{[^{}]*}\s*?(?:$|\n|;)|\s+default\b(?:\s*(\(|\{|class\s*\{|class\s+(?=extends\b)|(?:async\s+)?function\s*(?:\*\s*)?\())?|\b)/g, function(match, header) {
+        if (/^export\s+default/.test(match)) has_default = "function _uglify_export_default_() {}";
         if (!header) return "";
         if (header.length == 1) return "0, " + header;
-        return header.slice(0, -1) + " _" + ++count + header.slice(-1);
+        var name = "_uglify_export_default_";
+        if (/^class\b/.test(header)) do {
+            name = "_uglify_export_default_" + ++count;
+        } while (code.indexOf(name) >= 0);
+        return header.slice(0, -1) + " " + name + header.slice(-1);
     }).replace(/\bimport\.meta\b/g, function() {
         return '({ url: "https://example.com/path/index.html" })';
     }).replace(/\bimport\b(?:\s*([^\s('"][^('"]*)\bfrom\b)?\s*(['"]).*?\2(?:$|\n|;)/g, function(match, symbols) {
@@ -71,7 +78,7 @@ exports.patch_module_statements = function(code) {
         return "";
     });
     imports.push("");
-    return imports.join("\n") + code;
+    return strict_mode + has_default + imports.join("\n") + code;
 };
 
 function is_error(result) {
@@ -146,7 +153,8 @@ function setup(global, builtins, setup_log, setup_tty) {
                     delete ex[name];
                 }
             }
-            process.stderr.write(inspect(value) + "\n\n-----===== UNCAUGHT EXCEPTION =====-----\n\n");
+            var marker = "\n\n-----===== UNCAUGHT EXCEPTION =====-----\n\n";
+            process.stderr.write(marker + inspect(value) + marker);
             throw ex;
         }).on("unhandledRejection", function() {});
     }
@@ -202,13 +210,11 @@ function setup(global, builtins, setup_log, setup_tty) {
     });
     Object.defineProperties(global, props);
     // for Node.js v8+
-    if (global.toString !== Object.prototype.toString) {
-        global.__proto__ = Object.defineProperty(Object.create(global.__proto__), "toString", {
-            value: function() {
-                return "[object global]";
-            },
-        });
-    }
+    global.__proto__ = Object.defineProperty(Object.create(global.__proto__), "toString", {
+        value: function() {
+            return "[object global]";
+        },
+    });
 
     function self() {
         return this;
@@ -254,8 +260,11 @@ function run_code_vm(code, toplevel, timeout) {
         var ctx = vm.createContext({ console: console });
         // for Node.js v6
         vm.runInContext(setup_code, ctx);
-        vm.runInContext(toplevel ? "(function(){" + code + "})();" : code, ctx, { timeout: timeout });
-        return strip_color_codes(stdout);
+        vm.runInContext(toplevel ? "(function(){\n" + code + "\n})();" : code, ctx, { timeout: timeout });
+        // for Node.js v4
+        return strip_color_codes(stdout.replace(/\b(Array \[|Object {)/g, function(match) {
+            return match.slice(-1);
+        }));
     } catch (ex) {
         return ex;
     } finally {
@@ -265,7 +274,7 @@ function run_code_vm(code, toplevel, timeout) {
 
 function run_code_exec(code, toplevel, timeout) {
     if (toplevel) {
-        code = setup_code + "(function(){" + code + "})();";
+        code = setup_code + "(function(){\n" + code + "\n})();";
     } else {
         code = code.replace(/^((["'])[^"']*\2(;|$))?/, function(directive) {
             return directive + setup_code;
@@ -274,6 +283,7 @@ function run_code_exec(code, toplevel, timeout) {
     var result = spawnSync(process.argv[0], [ '--max-old-space-size=2048' ], {
         encoding: "utf8",
         input: code,
+        maxBuffer: 1073741824,
         stdio: "pipe",
         timeout: timeout || 5000,
     });
@@ -283,17 +293,21 @@ function run_code_exec(code, toplevel, timeout) {
         return new Error("Script execution timed out.");
     }
     if (result.error) return result.error;
-    var end = msg.indexOf("\n\n-----===== UNCAUGHT EXCEPTION =====-----\n\n");
+    var match = /\n([^:\s]*Error)(?:: ([\s\S]+?))?\n(    at [\s\S]+)\n$/.exec(msg);
+    var marker = "\n\n-----===== UNCAUGHT EXCEPTION =====-----\n\n";
+    var start = msg.indexOf(marker) + marker.length;
+    var end = msg.indexOf(marker, start);
     var details;
     if (end >= 0) {
-        details = msg.slice(0, end).replace(/<([1-9][0-9]*) empty items?>/g, function(match, count) {
+        details = msg.slice(start, end).replace(/<([1-9][0-9]*) empty items?>/g, function(match, count) {
             return new Array(+count).join();
         });
         try {
             details = vm.runInNewContext("(" + details + ")");
         } catch (e) {}
+    } else if (!match) {
+        return new Error("Script execution aborted.");
     }
-    var match = /\n([^:\s]*Error)(?:: ([\s\S]+?))?\n(    at [\s\S]+)\n$/.exec(msg);
     if (!match) return details;
     var ex = new global[match[1]](match[2]);
     ex.stack = ex.stack.slice(0, ex.stack.indexOf("    at ")) + match[3];

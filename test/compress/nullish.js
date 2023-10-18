@@ -262,6 +262,30 @@ de_morgan_2e: {
     node_version: ">=14"
 }
 
+inline_binary_nullish: {
+    options = {
+        inline: true,
+    }
+    input: {
+        (function() {
+            while (console.log("foo"));
+        })() ?? (function() {
+            while (console.log("bar"));
+        })();
+    }
+    expect: {
+        if (null == function() {
+            while (console.log("foo"));
+        }())
+            while (console.log("bar"));
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+    ]
+    node_version: ">=14"
+}
+
 issue_4679: {
     options = {
         comparisons: true,
@@ -278,5 +302,45 @@ issue_4679: {
             console.log("PASS");
     }
     expect_stdout: "PASS"
+    node_version: ">=14"
+}
+
+issue_5266: {
+    options = {
+        inline: true,
+        side_effects: true,
+    }
+    input: {
+        [
+            42,
+            null,
+            false,
+            void 0,
+            "FAIL",
+        ].forEach(function (a) {
+            a ?? function() {
+                while (console.log(a));
+            }();
+        });
+    }
+    expect: {
+        [
+            42,
+            null,
+            false,
+            void 0,
+            "FAIL",
+        ].forEach(function (a) {
+            if (null == a) {
+                while (console.log(a));
+                return;
+            } else
+                return;
+        });
+    }
+    expect_stdout: [
+        "null",
+        "undefined",
+    ]
     node_version: ">=14"
 }

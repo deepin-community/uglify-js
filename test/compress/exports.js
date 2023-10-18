@@ -109,6 +109,17 @@ foreign: {
     expect_exact: 'export*from"foo";export{}from"bar";export*as a from"baz";export{default}from"moo";export{b,c as case,default as delete,d}from"moz";'
 }
 
+non_identifiers: {
+    beautify = {
+        quote_style: 3,
+    }
+    input: {
+        export * as "42" from 'foo';
+        export { '42', "delete" as 'foo' } from "bar";
+    }
+    expect_exact: "export*as\"42\"from'foo';export{'42',delete as foo}from\"bar\";"
+}
+
 same_quotes: {
     beautify = {
         beautify: true,
@@ -417,6 +428,46 @@ hoist_funs: {
     expect_exact: "export function f(){}export default async function*g(){}"
 }
 
+instanceof_default_class: {
+    options = {
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        export default class A {
+            f(a) {
+                return a instanceof A;
+            }
+        }
+    }
+    expect: {
+        export default class A {
+            f(a) {
+                return a instanceof A;
+            }
+        }
+    }
+}
+
+instanceof_default_function: {
+    options = {
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        export default function f() {
+            if (!(this instanceof f))
+                throw new Error("must instantiate");
+        }
+    }
+    expect: {
+        export default function f() {
+            if (!(this instanceof f))
+                throw new Error("must instantiate");
+        }
+    }
+}
+
 issue_4742_join_vars_1: {
     options = {
         join_vars: true,
@@ -494,5 +545,38 @@ issue_4766: {
     expect: {
         var a = "foo";
         export var a = "bar";
+    }
+}
+
+issue_5444: {
+    options = {
+        unused: true,
+    }
+    input: {
+        export var a = (console, console);
+    }
+    expect: {
+        console;
+        export var a = console;
+    }
+}
+
+issue_5628: {
+    options = {
+        unused: true,
+    }
+    input: {
+        var a;
+        export default function f() {
+            for (a in 42);
+        }
+        console.log(a);
+    }
+    expect: {
+        var a;
+        export default function f() {
+            for (a in 42);
+        }
+        console.log(a);
     }
 }

@@ -290,6 +290,45 @@ increment_decrement_2: {
     expect_stdout: "42"
 }
 
+lazily_chained_assignments: {
+    options = {
+        assignments: true,
+        collapse_vars: true,
+        conditionals: true,
+        unused: true,
+    }
+    input: {
+        function f(a) {
+            if (a = console.log("foo"))
+                a = console.log("bar");
+            return a;
+        }
+        function g(b) {
+            if (b = console.log("baz"))
+                ;
+            else
+                b = console.log("moo");
+            return b;
+        }
+        console.log(f(), g());
+    }
+    expect: {
+        function f(a) {
+            return console.log("foo") && console.log("bar");
+        }
+        function g(b) {
+            return console.log("baz") || console.log("moo");
+        }
+        console.log(f(), g());
+    }
+    expect_stdout: [
+        "foo",
+        "baz",
+        "moo",
+        "undefined undefined",
+    ]
+}
+
 issue_3375_1: {
     options = {
         assignments: true,
@@ -489,7 +528,7 @@ logical_assignments: {
     node_version: ">=15"
 }
 
-logical_collapse_vars: {
+logical_collapse_vars_1: {
     options = {
         collapse_vars: true,
     }
@@ -506,6 +545,46 @@ logical_collapse_vars: {
         console.log(a);
     }
     expect_stdout: "PASS"
+    node_version: ">=15"
+}
+
+logical_collapse_vars_2: {
+    options = {
+        collapse_vars: true,
+    }
+    input: {
+        var a = "PASS";
+        (function(b) {
+            b ||= (a = "FAIL", {});
+            return b;
+        })(console).log(a);
+    }
+    expect: {
+        var a = "PASS";
+        (function(b) {
+            return b ||= (a = "FAIL", {});
+        })(console).log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=15"
+}
+
+logical_collapse_vars_3: {
+    options = {
+        collapse_vars: true,
+    }
+    input: {
+        var a = 6;
+        a *= 7;
+        a ??= "FAIL";
+        console.log(a);
+    }
+    expect: {
+        var a = 6;
+        a = a * 7 ?? "FAIL";
+        console.log(a);
+    }
+    expect_stdout: "42"
     node_version: ">=15"
 }
 
@@ -545,6 +624,24 @@ logical_side_effects: {
         var a = "PASS", b = 42;
         b ??= a = "FAIL";
         console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=15"
+}
+
+evaluate_lazy_assignment: {
+    options = {
+        evaluate: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a = 42;
+        console.log(a &&= "PASS");
+    }
+    expect: {
+        console.log("PASS");
     }
     expect_stdout: "PASS"
     node_version: ">=15"
@@ -615,8 +712,7 @@ issue_4827_1: {
         c &&= b = a, console.log(b);
     }
     expect: {
-        A = "FAIL";
-        var a = A, b = "PASS", c;
+        var a = A = "FAIL", b = "PASS", c;
         c &&= b = a, console.log(b);
     }
     expect_stdout: "PASS"
@@ -745,4 +841,24 @@ issue_4924_2: {
     }
     expect_stdout: "PASS"
     node_version: ">=15"
+}
+
+issue_5670: {
+    options = {
+        assignments: true,
+        evaluate: true,
+        reduce_vars: true,
+    }
+    input: {
+        (function(a, b) {
+            a && a && (a = b += "") || console.log("PASS");
+        })();
+    }
+    expect: {
+        (function(a, b) {
+            a = a,
+            console.log("PASS");
+        })();
+    }
+    expect_stdout: "PASS"
 }

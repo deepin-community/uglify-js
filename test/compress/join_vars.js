@@ -489,6 +489,160 @@ join_object_assignments_regex: {
     expect_stdout: "1"
 }
 
+chained_assignments: {
+    options = {
+        join_vars: true,
+    }
+    input: {
+        var a, b = a = {};
+        b.p = "PASS";
+        console.log(a.p);
+    }
+    expect: {
+        var a, b = a = {
+            p: "PASS",
+        };
+        console.log(a.p);
+    }
+    expect_stdout: "PASS"
+}
+
+folded_assignments_1: {
+    options = {
+        evaluate: true,
+        join_vars: true,
+    }
+    input: {
+        var a = {};
+        a[a.PASS = 42] = "PASS";
+        console.log(a[42], a.PASS);
+    }
+    expect: {
+        var a = {
+            PASS: 42,
+            42: "PASS",
+        };
+        console.log(a[42], a.PASS);
+    }
+    expect_stdout: "PASS 42"
+}
+
+folded_assignments_2: {
+    options = {
+        evaluate: true,
+        join_vars: true,
+    }
+    input: {
+        "use strict";
+        var a = {};
+        a[42] = "FAIL";
+        a[a.PASS = 42] = "PASS";
+        console.log(a[42], a.PASS);
+    }
+    expect: {
+        "use strict";
+        var a = {
+            42: "FAIL",
+            PASS: 42,
+        };
+        a[42] = "PASS";
+        console.log(a[42], a.PASS);
+    }
+    expect_stdout: "PASS 42"
+}
+
+inlined_assignments: {
+    options = {
+        join_vars: true,
+        unused: true,
+    }
+    input: {
+        var a;
+        (a = {}).p = "PASS";
+        console.log(a.p);
+    }
+    expect: {
+        var a = {
+            p: "PASS",
+        };
+        console.log(a.p);
+    }
+    expect_stdout: "PASS"
+}
+
+inline_for: {
+    options = {
+        inline: true,
+        join_vars: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a = function() {
+            for (; console.log("PASS"););
+        };
+        a();
+    }
+    expect: {
+        for (; console.log("PASS"););
+    }
+    expect_stdout: "PASS"
+}
+
+inline_var: {
+    options = {
+        inline: true,
+        join_vars: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        A = "PASS";
+        var a = function() {
+            var b = A;
+            for (b in console.log(b));
+        };
+        a();
+    }
+    expect: {
+        A = "PASS";
+        var b = A;
+        for (b in console.log(b));
+    }
+    expect_stdout: "PASS"
+}
+
+typescript_enum: {
+    rename = true
+    options = {
+        assignments: true,
+        collapse_vars: true,
+        evaluate: true,
+        hoist_props: true,
+        inline: true,
+        join_vars: true,
+        passes: 4,
+        reduce_vars: true,
+        sequences: true,
+        side_effects: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var Enum;
+        (function (Enum) {
+            Enum[Enum.PASS = 42] = "PASS";
+        })(Enum || (Enum = {}));
+        console.log(Enum[42], Enum.PASS);
+    }
+    expect: {
+        console.log("PASS", 42);
+    }
+    expect_stdout: "PASS 42"
+}
+
 issue_2816: {
     options = {
         join_vars: true,
@@ -990,7 +1144,7 @@ conditional_assignments_3: {
     expect_stdout: "PASS"
 }
 
-issue_3856: {
+issue_3856_1: {
     options = {
         booleans: true,
         conditionals: true,
@@ -1015,9 +1169,46 @@ issue_3856: {
         console.log(function() {
             (function() {
                 var a, b;
-                if (a) return a, 1;
-                for (a = 0; !console;);
-                return 0;
+                if (a) a;
+                else {
+                    a = 0;
+                    for (; !console;);
+                }
+            })();
+        }());
+    }
+    expect_stdout: "undefined"
+}
+
+issue_3856_2: {
+    options = {
+        booleans: true,
+        conditionals: true,
+        if_return: true,
+        join_vars: true,
+        passes: 2,
+        sequences: true,
+        side_effects: true,
+    }
+    input: {
+        console.log(function() {
+            (function() {
+                var a;
+                if (!a) {
+                    a = 0;
+                    for (var b; !console;);
+                    return 0;
+                }
+                if (a) return 1;
+            })();
+        }());
+    }
+    expect: {
+        console.log(function() {
+            (function() {
+                var a, b;
+                if (!a)
+                    for (a = 0; !console;);
             })();
         }());
     }
@@ -1172,14 +1363,34 @@ assign_sequence_var: {
         console.log(a, b, c);
     }
     expect: {
-        var a = 0, b = 1;
-        console.log(a),
-        a++;
-        var b = 2, c = 3;
+        var a = 0, b = 1, c = (console.log(a), a++, b = 2, 3);
         console.log(a, b, c);
     }
     expect_stdout: [
         "0",
         "1 2 3",
     ]
+}
+
+issue_5175: {
+    options = {
+        join_vars: true,
+    }
+    input: {
+        function log(f) {
+            console.log(f(), A.p);
+        }
+        log(function() {
+            return (A = {}).p = "PASS";
+        });
+    }
+    expect: {
+        function log(f) {
+            console.log(f(), A.p);
+        }
+        log(function() {
+            return (A = {}).p = "PASS";
+        });
+    }
+    expect_stdout: "PASS PASS"
 }

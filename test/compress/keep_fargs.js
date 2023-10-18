@@ -181,10 +181,10 @@ issue_2203_2: {
             a: "FAIL",
             b: function() {
                 return function() {
-                    return (String, (Object, function() {
+                    return (Object, function() {
                         return this;
-                    }())).a;
-                }();
+                    }()).a;
+                }(String);
             }
         }.b());
     }
@@ -925,6 +925,28 @@ duplicate_lambda_defun_name_2: {
     expect_stdout: "0"
 }
 
+function_argument_mangle: {
+    mangle = {
+        keep_fargs: true,
+        toplevel: true,
+    }
+    input: {
+        A = "PASS";
+        var a = A;
+        (function(o) {
+            console.log(a);
+        })("FAIL");
+    }
+    expect: {
+        A = "PASS";
+        var n = A;
+        (function(o) {
+            console.log(n);
+        })("FAIL");
+    }
+    expect_stdout: "PASS"
+}
+
 function_name_mangle: {
     options = {
         keep_fargs: false,
@@ -1217,6 +1239,7 @@ issues_3267_1: {
         evaluate: true,
         inline: true,
         keep_fargs: false,
+        negate_iife: true,
         reduce_vars: true,
         sequences: true,
         side_effects: true,

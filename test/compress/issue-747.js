@@ -1,6 +1,7 @@
 dont_reuse_prop: {
     mangle = {
         properties: {
+            domprops: true,
             regex: /asd/,
         },
     }
@@ -19,11 +20,17 @@ dont_reuse_prop: {
         console.log(obj.a);
     }
     expect_stdout: "123"
+    expect_warnings: [
+        "INFO: Preserving excluded property a",
+        "INFO: Mapping property asd to b",
+        "INFO: Preserving reserved property log",
+    ]
 }
 
 unmangleable_props_should_always_be_reserved: {
     mangle = {
         properties: {
+            domprops: true,
             regex: /asd/,
         },
     }
@@ -42,4 +49,9 @@ unmangleable_props_should_always_be_reserved: {
         console.log(obj.a);
     }
     expect_stdout: "123"
+    expect_warnings: [
+        "INFO: Preserving excluded property a",
+        "INFO: Mapping property asd to b",
+        "INFO: Preserving reserved property log",
+    ]
 }

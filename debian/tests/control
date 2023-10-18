@@ -18,6 +18,7 @@ Test-Command: cd /usr/share/javascript &&
 Depends:
  eslint,
  libjs-uglify-js,
+ node-js-yaml,
 Restrictions: superficial, skip-not-installable
 
 Test-Command: prove debian/tests/*.t

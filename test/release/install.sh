@@ -36,7 +36,7 @@ EOF
 }
 if [ $NATIVE ]; then unset -f timeout; fi
 
-while !(git clone --branch v1.6.0 --depth 1 https://github.com/jasongin/nvs.git ~/.nvs); do
+while !(git clone --branch v1.6.2 --depth 1 https://github.com/jasongin/nvs.git ~/.nvs); do
     rm -rf ~/.nvs
 done
 while ! timeout 60 bash -c ". ~/.nvs/nvs.sh add $NODE && nvs use $NODE"; do
@@ -48,6 +48,8 @@ done
 nvs use $NODE
 node --version
 npm config set audit false
+npm config set fund false
+npm config set loglevel error
 npm config set optional false
 npm config set save false
 npm config set strict-ssl false

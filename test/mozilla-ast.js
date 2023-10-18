@@ -9,19 +9,22 @@ function beautify(ast) {
     var beautified = UglifyJS.minify(ast, {
         compress: false,
         mangle: false,
+        module: ufuzz.module,
         output: {
+            ast: true,
             beautify: true,
             braces: true,
         },
     });
-    if (beautified.error) return beautified;
-    return UglifyJS.minify(beautified.code, {
-        compress: false,
-        mangle: false,
-        output: {
-            ast: true,
-        },
-    });
+    if (!beautified.error) {
+        var verify = UglifyJS.minify(beautified.code, {
+            compress: false,
+            mangle: false,
+            module: ufuzz.module,
+        });
+        if (verify.error) return verify;
+    }
+    return beautified;
 }
 
 function validate(ast) {
@@ -35,6 +38,7 @@ function validate(ast) {
     return UglifyJS.minify(ast, {
         compress: false,
         mangle: false,
+        module: ufuzz.module,
         output: {
             ast: true,
         },
@@ -57,12 +61,12 @@ function test(input, to_moz, description, skip_on_error, beautified) {
         var ast = UglifyJS.AST_Node.from_mozilla_ast(to_moz(input));
     } catch (e) {
         if (skip_on_error) return true;
-        console.log("//=============================================================");
-        console.log("//", description, "failed... round", round);
-        console.log(e);
-        console.log("// original code");
-        if (beautified === true) console.log("// (beautified)");
-        console.log(input.code);
+        console.error("//=============================================================");
+        console.error("//", description, "failed... round", round);
+        console.error(e);
+        console.error("// original code");
+        if (beautified === true) console.error("// (beautified)");
+        console.error(input.code);
         return false;
     }
     var transformed = validate(ast);
@@ -74,34 +78,34 @@ function test(input, to_moz, description, skip_on_error, beautified) {
                 if (!test(beautified, to_moz, description, skip_on_error, true)) return false;
             }
         }
-        console.log("//=============================================================");
-        console.log("// !!!!!! Failed... round", round);
-        console.log("// original code");
+        console.error("//=============================================================");
+        console.error("// !!!!!! Failed... round", round);
+        console.error("// original code");
         if (beautified.error) {
-            console.log("// !!! beautify failed !!!");
-            console.log(beautified.error.stack);
+            console.error("// !!! beautify failed !!!");
+            console.error(beautified.error.stack);
         } else if (beautified === true) {
-            console.log("// (beautified)");
+            console.error("// (beautified)");
         }
-        console.log(input.raw);
-        console.log();
-        console.log();
-        console.log("//-------------------------------------------------------------");
-        console.log("//", description);
+        console.error(input.raw);
+        console.error();
+        console.error();
+        console.error("//-------------------------------------------------------------");
+        console.error("//", description);
         if (transformed.error) {
-            console.log(transformed.error.stack);
+            console.error(transformed.error.stack);
         } else {
             beautified = beautify(transformed.ast);
             if (beautified.error) {
-                console.log("// !!! beautify failed !!!");
-                console.log(beautified.error.stack);
-                console.log(transformed.code);
+                console.error("// !!! beautify failed !!!");
+                console.error(beautified.error.stack);
+                console.error(transformed.code);
             } else {
-                console.log("// (beautified)");
-                console.log(beautified.code);
+                console.error("// (beautified)");
+                console.error(beautified.code);
             }
         }
-        console.log("!!!!!! Failed... round", round);
+        console.error("!!!!!! Failed... round", round);
         return false;
     }
     return true;
@@ -115,9 +119,29 @@ for (var round = 1; round <= num_iterations; round++) {
     var code = ufuzz.createTopLevelCode();
     minify_options.forEach(function(options) {
         var ok = true;
-        var input = UglifyJS.minify(options ? UglifyJS.minify(code, JSON.parse(options)).code : code, {
+        var minified;
+        if (options) {
+            var o = JSON.parse(options);
+            o.module = ufuzz.module;
+            minified = UglifyJS.minify(code, o);
+            if (minified.error) {
+                console.log("//=============================================================");
+                console.log("// minify() failed... round", round);
+                console.log("// original code");
+                console.log(code);
+                console.log();
+                console.log();
+                console.log("//-------------------------------------------------------------");
+                console.log("minify(options):");
+                console.log(JSON.stringify(o, null, 2));
+                return;
+            }
+            minified = minified.code;
+        }
+        var input = UglifyJS.minify(minified || code, {
             compress: false,
             mangle: false,
+            module: ufuzz.module,
             output: {
                 ast: true,
             },
@@ -125,11 +149,27 @@ for (var round = 1; round <= num_iterations; round++) {
         input.raw = options ? input.code : code;
         if (input.error) {
             ok = false;
-            console.log("//=============================================================");
-            console.log("// minify() failed... round", round);
-            console.log(input.error);
-            console.log("// original code");
-            console.log(code);
+            console.error("//=============================================================");
+            console.error("// parse() failed... round", round);
+            console.error("// original code");
+            console.error(code);
+            console.error();
+            console.error();
+            if (options) {
+                console.error("//-------------------------------------------------------------");
+                console.error("// minified code");
+                console.error(minified);
+                console.error();
+                console.error();
+                console.error("//-------------------------------------------------------------");
+                console.error("minify(options):");
+                console.error(JSON.stringify(o, null, 2));
+                console.error();
+                console.error();
+            }
+            console.error("//-------------------------------------------------------------");
+            console.error("// parse() error");
+            console.error(input.error);
         }
         if (ok) ok = test(input, function(input) {
             return input.ast.to_mozilla_ast();
@@ -141,7 +181,10 @@ for (var round = 1; round <= num_iterations; round++) {
                 sourceType: "module",
             });
         }, "acorn.parse()", !ufuzz.verbose);
-        if (!ok) process.exit(1);
+        if (!ok && isFinite(num_iterations)) {
+            console.log();
+            process.exit(1);
+        }
     });
 }
 console.log();

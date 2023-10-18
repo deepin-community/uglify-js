@@ -418,4 +418,92 @@ describe("test/reduce.js", function() {
         if (result.error) throw result.error;
         assert.deepEqual(result.warnings, []);
     });
+    it("Should handle thrown falsy values gracefully", function() {
+        var code = [
+            "throw 0;",
+            "setTimeout(null, 42);",
+        ].join("\n");
+        var result = reduce_test(code, {
+            mangle: false,
+        });
+        if (result.error) throw result.error;
+        assert.strictEqual(result.code, [
+            "// Can't reproduce test failure",
+            "// minify options: {",
+            '//   "mangle": false',
+            "// }",
+        ].join("\n"));
+    });
+    it("Should transform `export default class` correctly", function() {
+        var result = reduce_test(read("test/input/reduce/export_default.js"), {
+            compress: false,
+            toplevel: true,
+        });
+        if (result.error) throw result.error;
+        assert.strictEqual(result.code, [
+            "// Can't reproduce test failure",
+            "// minify options: {",
+            '//   "compress": false,',
+            '//   "toplevel": true',
+            "// }",
+        ].join("\n"));
+    });
+    it("Should transform `export default function` correctly", function() {
+        if (semver.satisfies(process.version, "<8")) return;
+        var code = [
+            "export default function f(a) {",
+            "    for (var k in a)",
+            "        console.log(k);",
+            "    (async function() {})();",
+            "}",
+            "f(this);",
+        ].join("\n");
+        var result = reduce_test(code, {
+            mangle: false,
+        });
+        if (result.error) throw result.error;
+        assert.strictEqual(result.code, [
+            "// Can't reproduce test failure",
+            "// minify options: {",
+            '//   "mangle": false',
+            "// }",
+        ].join("\n"));
+    });
+    it("Should transform `export default (function)` correctly", function() {
+        var code = [
+            "for (var k in this)",
+            "    console.log(k);",
+            "export default (function f() {});",
+            "console.log(k);",
+        ].join("\n");
+        var result = reduce_test(code, {
+            mangle: false,
+        });
+        if (result.error) throw result.error;
+        assert.strictEqual(result.code, [
+            "// Can't reproduce test failure",
+            "// minify options: {",
+            '//   "mangle": false',
+            "// }",
+        ].join("\n"));
+    });
+    it("Should transform `export default (42)` correctly", function() {
+        var code = [
+            "export default (42);",
+            "for (var k in this)",
+            "    console.log(k);",
+        ].join("\n");
+        var result = reduce_test(code, {
+            compress: false,
+            mangle: false,
+        });
+        if (result.error) throw result.error;
+        assert.strictEqual(result.code, [
+            "// Can't reproduce test failure",
+            "// minify options: {",
+            '//   "compress": false,',
+            '//   "mangle": false',
+            "// }",
+        ].join("\n"));
+    });
 });

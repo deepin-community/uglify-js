@@ -367,6 +367,28 @@ inline_this: {
         inline: true,
     }
     input: {
+        var p = "PASS";
+        console.log({
+            p: "FAIL",
+            q: (() => this.p)(),
+        }.q);
+    }
+    expect: {
+        var p = "PASS";
+        console.log({
+            p: "FAIL",
+            q: this.p,
+        }.q);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+dont_inline_this: {
+    options = {
+        inline: true,
+    }
+    input: {
         var o = {
             p: function() {
                 return function() {
@@ -486,7 +508,7 @@ drop_value: {
         ((a, b) => a + b)(console.log(42));
     }
     expect: {
-        ((a, b) => {})(console.log(42));
+        void console.log(42);
     }
     expect_stdout: "42"
     node_version: ">=4"
@@ -643,6 +665,28 @@ single_use_recursive: {
         }());
     }
     expect_stdout: "function"
+    node_version: ">=4"
+}
+
+inline_iife_within_arrow: {
+    options = {
+        arrows: true,
+        inline: true,
+    }
+    input: {
+        var f = () => console.log(function(a) {
+            return Math.ceil(a);
+        }(Math.random()));
+        f();
+    }
+    expect: {
+        var f = () => {
+            return console.log((a = Math.random(), Math.ceil(a)));
+            var a;
+        };
+        f();
+    }
+    expect_stdout: "1"
     node_version: ">=4"
 }
 
@@ -882,5 +926,336 @@ issue_4772: {
     }
     expect_exact: 'var f=a=>a;console.log(f("PASS"));'
     expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+issue_5251: {
+    options = {
+        inline: true,
+        toplevel: true,
+    }
+    input: {
+        (() => {
+            while (console.log(arguments))
+                var arguments = "FAIL";
+        })();
+    }
+    expect: {
+        (() => {
+            while (console.log(arguments))
+                var arguments = "FAIL";
+        })();
+    }
+    expect_stdout: true
+    node_version: ">=4"
+}
+
+issue_5342_1: {
+    options = {
+        dead_code: true,
+        inline: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        for (var a in 0) {
+            (() => {
+                while (1);
+            })(new function(NaN) {
+                a.p;
+            }());
+        }
+        console.log(function() {
+            return b;
+            try {
+                b;
+            } catch (e) {
+                var b;
+            }
+        }());
+    }
+    expect: {
+        for (var a in 0) {
+            (function(NaN) {
+                a.p;
+            })();
+            while (1);
+        }
+        console.log(b);
+        var b;
+    }
+    expect_stdout: "undefined"
+    node_version: ">=4"
+}
+
+issue_5342_2: {
+    rename = true
+    options = {
+        dead_code: true,
+        inline: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        for (var a in 0) {
+            (() => {
+                while (1);
+            })(new function(NaN) {
+                a.p;
+            }());
+        }
+        console.log(function() {
+            return b;
+            try {
+                b;
+            } catch (e) {
+                var b;
+            }
+        }());
+    }
+    expect: {
+        for (var a in 0) {
+            a.p;
+            while (1);
+        }
+        console.log(c);
+        var c;
+    }
+    expect_stdout: "undefined"
+    node_version: ">=4"
+}
+
+issue_5356: {
+    options = {
+        evaluate: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        console.log((a => a++)(console));
+    }
+    expect: {
+        console.log((a => +a)(console));
+    }
+    expect_stdout: "NaN"
+    node_version: ">=4"
+}
+
+issue_5414_1: {
+    options = {
+        arrows: true,
+        if_return: true,
+        inline: true,
+        toplevel: true,
+    }
+    input: {
+        (() => {
+            (() => {
+                if (!console)
+                    var arguments = 42;
+                while (console.log(arguments));
+            })();
+        })();
+    }
+    expect: {
+        (() => {
+            if (!console)
+                var arguments = 42;
+            while (console.log(arguments));
+        })();
+    }
+    expect_stdout: true
+    node_version: ">=4"
+}
+
+issue_5414_2: {
+    options = {
+        arrows: true,
+        inline: true,
+        side_effects: true,
+        toplevel: true,
+    }
+    input: {
+        (() => {
+            (() => {
+                if (!console)
+                    var arguments = 42;
+                while (console.log(arguments));
+            })();
+        })();
+    }
+    expect: {
+        (() => {
+            if (!console)
+                var arguments = 42;
+            while (console.log(arguments));
+        })();
+    }
+    expect_stdout: true
+    node_version: ">=4"
+}
+
+issue_5416_1: {
+    options = {
+        dead_code: true,
+        evaluate: true,
+        inline: true,
+        loops: true,
+        unused: true,
+    }
+    input: {
+        var f = () => {
+            while ((() => {
+                console;
+                var a = function g(arguments) {
+                    console.log(arguments);
+                }();
+            })());
+        };
+        f();
+    }
+    expect: {
+        var f = () => {
+            {
+                console;
+                arguments = void 0,
+                console.log(arguments);
+                var arguments;
+                return;
+            }
+        };
+        f();
+    }
+    expect_stdout: "undefined"
+    node_version: ">=4"
+}
+
+issue_5416_2: {
+    options = {
+        dead_code: true,
+        evaluate: true,
+        inline: true,
+        loops: true,
+        unused: true,
+    }
+    input: {
+        var f = () => {
+            while ((() => {
+                console;
+                var a = function g(arguments) {
+                    while (console.log(arguments));
+                }();
+            })());
+        };
+        f();
+    }
+    expect: {
+        var f = () => {
+            {
+                console;
+                var arguments = void 0;
+                for (; console.log(arguments););
+                return;
+            }
+        };
+        f();
+    }
+    expect_stdout: "undefined"
+    node_version: ">=4"
+}
+
+issue_5416_3: {
+    options = {
+        inline: true,
+        side_effects: true,
+        unused: true,
+    }
+    input: {
+        var f = () => {
+            (() => {
+                var a = function g(arguments) {
+                    console.log(arguments);
+                }();
+            })();
+        };
+        f();
+    }
+    expect: {
+        var f = () => {
+            arguments = void 0,
+            console.log(arguments);
+            var arguments;
+        };
+        f();
+    }
+    expect_stdout: "undefined"
+    node_version: ">=4"
+}
+
+issue_5416_4: {
+    options = {
+        arrows: true,
+        inline: true,
+        side_effects: true,
+        unused: true,
+    }
+    input: {
+        var f = () => {
+            (() => {
+                var a = function g(arguments) {
+                    while (console.log(arguments));
+                }();
+            })();
+        };
+        f();
+    }
+    expect: {
+        var f = () => {
+            var arguments = void 0;
+            while (console.log(arguments));
+            return;
+        };
+        f();
+    }
+    expect_stdout: "undefined"
+    node_version: ">=4"
+}
+
+issue_5495: {
+    input: {
+        console.log((() => {
+            "use strict";
+            return function() {
+                return this;
+            }();
+        })());
+    }
+    expect_exact: 'console.log((()=>{"use strict";return function(){return this}()})());'
+    expect_stdout: "undefined"
+    node_version: ">=4"
+}
+
+issue_5653: {
+    options = {
+        arrows: true,
+        hoist_props: true,
+        passes: 2,
+        reduce_vars: true,
+        sequences: true,
+        side_effects: true,
+        unused: true,
+    }
+    input: {
+        console.log((a => {
+            a = { p: console };
+            return a++;
+        })());
+    }
+    expect: {
+        console.log((a => {
+            return console, +{};
+        })());
+    }
+    expect_stdout: "NaN"
     node_version: ">=4"
 }

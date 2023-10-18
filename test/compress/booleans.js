@@ -80,6 +80,25 @@ de_morgan_1c: {
     expect_stdout: "true"
 }
 
+de_morgan_1d: {
+    options = {
+        booleans: true,
+    }
+    input: {
+        function f(a) {
+            return (a = false) || a;
+        }
+        console.log(f(null), f(42));
+    }
+    expect: {
+        function f(a) {
+            return a = !1;
+        }
+        console.log(f(null), f(42));
+    }
+    expect_stdout: "false false"
+}
+
 de_morgan_2a: {
     options = {
         booleans: true,
@@ -164,6 +183,31 @@ de_morgan_2d: {
     input: {
         function f(a, b) {
             return a && (a && b);
+        }
+        console.log(f(null), f(null, {}));
+        console.log(f(42), f(42, {}));
+    }
+    expect: {
+        function f(a, b) {
+            return a && b;
+        }
+        console.log(f(null), f(null, {}));
+        console.log(f(42), f(42, {}));
+    }
+    expect_stdout: [
+        "null null",
+        "undefined {}",
+    ]
+}
+
+de_morgan_2e: {
+    options = {
+        booleans: true,
+        conditionals: true,
+    }
+    input: {
+        function f(a, b) {
+            return (a && b) && b;
         }
         console.log(f(null), f(null, {}));
         console.log(f(42), f(42, {}));
@@ -423,6 +467,44 @@ negated_if: {
             if (!a)
                 return "PASS";
         }(!console));
+    }
+    expect_stdout: "PASS"
+}
+
+concat_truthy: {
+    options = {
+        booleans: true,
+        evaluate: true,
+    }
+    input: {
+        console.log("foo") + (console.log("bar"), "baz") || console.log("moo");
+    }
+    expect: {
+        console.log("foo") + (console.log("bar"), "baz");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+    ]
+    expect_warnings: [
+        "WARN: + in boolean context always true [test/compress/booleans.js:1,8]",
+        "WARN: Condition left of || always true [test/compress/booleans.js:1,8]",
+    ]
+}
+
+process_returns: {
+    options = {
+        booleans: true,
+    }
+    input: {
+        (function() {
+            return 42;
+        })() && console.log("PASS");
+    }
+    expect: {
+        (function() {
+            return 42;
+        })() && console.log("PASS");
     }
     expect_stdout: "PASS"
 }
@@ -696,4 +778,89 @@ issue_5041_2: {
         a || (a = 42) && (a ? console.log("PASS") : console.log("FAIL"));
     }
     expect_stdout: "PASS"
+}
+
+issue_5228: {
+    options = {
+        booleans: true,
+        evaluate: true,
+        inline: true,
+        passes: 2,
+    }
+    input: {
+        console.log(function() {
+            return !function() {
+                do {
+                    return null;
+                } while (console);
+            }();
+        }());
+    }
+    expect: {
+        console.log(function() {
+            do {
+                return !0;
+            } while (console);
+            return !0;
+        }());
+    }
+    expect_stdout: "true"
+}
+
+issue_5469: {
+    options = {
+        assignments: true,
+        booleans: true,
+        conditionals: true,
+        dead_code: true,
+        evaluate: true,
+        pure_getters: "strict",
+        side_effects: true,
+    }
+    input: {
+        console.log(function f(a) {
+            a && 42[a = A && null];
+        }());
+    }
+    expect: {
+        console.log(function f(a) {
+            a && A,
+            0;
+        }());
+    }
+    expect_stdout: "undefined"
+}
+
+issue_5694_1: {
+    options = {
+        booleans: true,
+        conditionals: true,
+    }
+    input: {
+        var Infinity;
+        // Node.js v0.12~6 (vm): 42
+        console.log((Infinity = 42) && Infinity);
+    }
+    expect: {
+        var Infinity;
+        console.log((Infinity = 42) && Infinity);
+    }
+    expect_stdout: true
+}
+
+issue_5694_2: {
+    options = {
+        booleans: true,
+        conditionals: true,
+    }
+    input: {
+        var undefined;
+        // Node.js v0.12~6 (vm): NaN
+        console.log(("foo", ++undefined) || undefined);
+    }
+    expect: {
+        var undefined;
+        console.log(("foo", ++undefined) || undefined);
+    }
+    expect_stdout: true
 }

@@ -1485,8 +1485,6 @@ self_assignments_5: {
     }
     expect: {
         var i = 0, l = [ "FAIL", "PASS" ];
-        l[0];
-        l[0];
         l[0] = l[1];
         console.log(l[0], 2);
     }
@@ -1666,6 +1664,69 @@ issue_5106_2: {
         console.log(function(a) {
             return arguments;
         }("PASS")[0]);
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5506: {
+    options = {
+        dead_code: true,
+    }
+    input: {
+        try {
+            (function(a) {
+                var b = 1;
+                (function f() {
+                    try {
+                        b-- && f();
+                    } catch (c) {}
+                    console.log(a);
+                    a = 42 in (a = "bar");
+                })();
+            })("foo");
+        } catch (e) {}
+    }
+    expect: {
+        try {
+            (function(a) {
+                var b = 1;
+                (function f() {
+                    try {
+                        b-- && f();
+                    } catch (c) {}
+                    console.log(a);
+                    a = 42 in (a = "bar");
+                })();
+            })("foo");
+        } catch (e) {}
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+    ]
+}
+
+issue_5641: {
+    options = {
+        collapse_vars: true,
+        conditionals: true,
+        dead_code: true,
+    }
+    input: {
+        function f(a) {
+            if (a || b) {
+                var b = "PASS", c = b && console.log(b);
+            } else
+                var d = a || b;
+        }
+        f(42);
+    }
+    expect: {
+        function f(a) {
+            var b, c, d;
+            (a || b) && (b = "PASS") && console.log(b);
+        }
+        f(42);
     }
     expect_stdout: "PASS"
 }

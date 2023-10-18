@@ -53,11 +53,21 @@ mangle_props: {
         );
     }
     expect_stdout: "1 1 1 2 2 2 3 3 3 4 4 4 5 5"
+    expect_warnings: [
+        "INFO: Preserving reserved property undefined",
+        "INFO: Preserving reserved property NaN",
+        "INFO: Preserving reserved property Infinity",
+        "INFO: Preserving reserved property -Infinity",
+        "INFO: Preserving reserved property null",
+        "INFO: Preserving reserved property log",
+    ]
 }
 
 numeric_literal: {
     mangle = {
-        properties: true,
+        properties: {
+            domprops: true,
+        },
     }
     beautify = {
         beautify: true,
@@ -106,11 +116,19 @@ numeric_literal: {
         "4 5 4 4",
         "8 7 8",
     ]
+    expect_warnings: [
+        "INFO: Mapping property 0x25 to o",
+        "INFO: Mapping property 1E42 to b",
+        "INFO: Preserving reserved property log",
+    ]
 }
 
 identifier: {
     mangle = {
-        properties: true,
+        properties: {
+            builtins: true,
+            domprops: true,
+        },
     }
     input: {
         var obj = {
@@ -209,37 +227,37 @@ identifier: {
             B: 28,
             C: 29,
             D: 30,
-            F: 31,
-            G: 32,
-            false: 33,
-            null: 34,
-            true: 35,
-            H: 36,
-            I: 37,
-            J: 38,
-            K: 39,
-            L: 40,
-            M: 41,
-            N: 42,
-            O: 43,
-            P: 44,
-            Q: 45,
-            R: 46,
-            S: 47,
-            T: 48,
-            U: 49,
-            V: 50,
-            W: 51,
-            X: 52,
-            Y: 53,
-            Z: 54,
-            $: 55,
-            _: 56,
-            ee: 57,
-            te: 58,
-            ne: 59,
-            ae: 60,
-            ie: 61,
+            E: 31,
+            F: 32,
+            G: 33,
+            H: 34,
+            I: 35,
+            J: 36,
+            K: 37,
+            L: 38,
+            M: 39,
+            N: 40,
+            O: 41,
+            P: 42,
+            Q: 43,
+            R: 44,
+            S: 45,
+            T: 46,
+            U: 47,
+            V: 48,
+            W: 49,
+            X: 50,
+            Y: 51,
+            Z: 52,
+            $: 53,
+            _: 54,
+            ee: 55,
+            te: 56,
+            ne: 57,
+            ae: 58,
+            ie: 59,
+            oe: 60,
+            re: 61,
         };
     }
 }

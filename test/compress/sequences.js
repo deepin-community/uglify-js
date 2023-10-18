@@ -289,8 +289,34 @@ iife: {
         typeof function g() {}();
     }
     expect: {
-        x = 42, function a() {}(), function b() {}(), function c() {}(),
-        function d() {}(), function e() {}(), function f() {}(), function g() {}();
+        x = 42,
+        function a() {}(),
+        !function b() {}(),
+        ~function c() {}(),
+        +function d() {}(),
+        -function e() {}(),
+        void function f() {}(),
+        typeof function g() {}();
+    }
+}
+
+iife_drop_side_effect_free: {
+    options = {
+        sequences: true,
+        side_effects: true,
+    }
+    input: {
+        x = 42;
+        (function a() {})();
+        !function b() {}();
+        ~function c() {}();
+        +function d() {}();
+        -function e() {}();
+        void function f() {}();
+        typeof function g() {}();
+    }
+    expect: {
+        x = 42;
     }
 }
 
@@ -774,7 +800,7 @@ side_effects_cascade_3: {
     }
     expect: {
         function f(a, b) {
-            (b += a) || (b = a) || (b -= a, b ^= a),
+            (b += a) || (b = a) || (b = b - a ^ a),
             a--;
         }
     }
@@ -910,9 +936,7 @@ hoist_decl: {
         var d;
     }
     expect: {
-        var a;
-        w();
-        var b = x(), c, d;
+        var a, b = (w(), x()), c, d;
         for (y(); 0;) z();
     }
 }
@@ -1047,11 +1071,102 @@ call: {
         b.c = function() {
             console.log(this === b ? "bar" : "baz");
         },
+        a,
         b(),
+        a,
         b.c(),
         (a, b.c)(),
+        a,
         b["c"](),
         (a, b["c"])(),
+        a,
+        function() {
+            console.log(this === a);
+        }(),
+        a,
+        new b(),
+        a,
+        new b.c(),
+        a,
+        new b.c(),
+        a,
+        new b["c"](),
+        a,
+        new b["c"](),
+        a,
+        new function() {
+            console.log(this === a);
+        }(),
+        console.log((a, typeof b.c)),
+        console.log((a, typeof b["c"]));
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "baz",
+        "bar",
+        "baz",
+        "true",
+        "foo",
+        "baz",
+        "baz",
+        "baz",
+        "baz",
+        "false",
+        "function",
+        "function",
+    ]
+}
+
+call_drop_side_effect_free: {
+    options = {
+        sequences: true,
+        side_effects: true,
+    }
+    input: {
+        var a = function() {
+            return this;
+        }();
+        function b() {
+            console.log("foo");
+        }
+        b.c = function() {
+            console.log(this === b ? "bar" : "baz");
+        };
+        (a, b)();
+        (a, b).c();
+        (a, b.c)();
+        (a, b)["c"]();
+        (a, b["c"])();
+        (a, function() {
+            console.log(this === a);
+        })();
+        new (a, b)();
+        new (a, b).c();
+        new (a, b.c)();
+        new (a, b)["c"]();
+        new (a, b["c"])();
+        new (a, function() {
+            console.log(this === a);
+        })();
+        console.log(typeof (a, b).c);
+        console.log(typeof (a, b)["c"]);
+    }
+    expect: {
+        var a = function() {
+            return this;
+        }();
+        function b() {
+            console.log("foo");
+        }
+        b.c = function() {
+            console.log(this === b ? "bar" : "baz");
+        },
+        b(),
+        b.c(),
+        (0, b.c)(),
+        b["c"](),
+        (0, b["c"])(),
         function() {
             console.log(this === a);
         }(),
@@ -1063,8 +1178,8 @@ call: {
         new function() {
             console.log(this === a);
         }(),
-        console.log((a, typeof b.c)),
-        console.log((a, typeof b["c"]));
+        console.log(typeof b.c),
+        console.log(typeof b["c"]);
     }
     expect_stdout: [
         "foo",
@@ -1099,6 +1214,26 @@ missing_link: {
     expect: {
         var a = 100;
         a,
+        a++ + (0, 1),
+        console.log(a);
+    }
+}
+
+missing_link_drop_side_effect_free: {
+    options = {
+        conditionals: true,
+        evaluate: true,
+        sequences: true,
+        side_effects: true,
+    }
+    input: {
+        var a = 100;
+        a;
+        a++ + (0 ? 2 : 1);
+        console.log(a);
+    }
+    expect: {
+        var a = 100;
         a++,
         console.log(a);
     }
@@ -1162,10 +1297,8 @@ issue_3490_1: {
     }
     expect: {
         var b = 42, c = "FAIL";
-        if (function() {
-            var a;
-            a && a.p;
-        }(), c = "PASS", b) while ("" == typeof d);
+        var a;
+        if (a && a.p, c = "PASS", b) while ("" == typeof d);
         console.log(c, b);
     }
     expect_stdout: "PASS 42"
@@ -1195,9 +1328,8 @@ issue_3490_2: {
     }
     expect: {
         var b = 42, c = "FAIL";
-        for (function() {
-            var a;
-        }(), c = "PASS", b; "" == typeof d;);
+        var a;
+        for (c = "PASS"; "" == typeof d;);
         console.log(c, b);
     }
     expect_stdout: "PASS 42"

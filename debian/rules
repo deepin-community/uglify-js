@@ -14,15 +14,6 @@ ifeq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))
 DOCS = README.html README.txt
 endif
 
-%:
-	dh $@
-
-%.html: %.md
-	pandoc --from gfm-raw_html --to html --standalone --output $@ $<
-
-%.txt: %.md
-	pandoc --from gfm-raw_html --to plain --output $@ $<
-
 # build browser library and documentation
 # * include plain uncompressed flavor, and minified with source-map
 # * pre-compress minified files in gzip, and brotli formats
@@ -59,3 +50,12 @@ override_dh_auto_test:
 # install core documentation with all binary packages
 override_dh_installdocs:
 	dh_installdocs -- $(DOCS)
+
+%.html: %.md
+	cmark-gfm $< > $@
+
+%.txt: %.md
+	cmark-gfm --to plaintext $< > $@
+
+%:
+	dh $@

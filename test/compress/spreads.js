@@ -1,15 +1,24 @@
+decimal: {
+    input: {
+        console.log({... 0.42});
+    }
+    expect_exact: "console.log({....42});"
+    expect_stdout: "{}"
+    node_version: ">=8.3.0"
+}
+
 collapse_vars_1: {
     options = {
         collapse_vars: true,
     }
     input: {
         var a;
-        [ ...a = "PASS", "PASS"].slice();
+        [ ...a = "PASS", "PASS" ].slice();
         console.log(a);
     }
     expect: {
         var a;
-        [ ...a = "PASS", "PASS"].slice();
+        [ ...a = "PASS", "PASS" ].slice();
         console.log(a);
     }
     expect_stdout: "PASS"
@@ -24,7 +33,7 @@ collapse_vars_2: {
         var a = "FAIL";
         try {
             a = "PASS";
-            [ ...42, "PASS"].slice();
+            [ ...42, "PASS" ].slice();
         } catch (e) {
             console.log(a);
         }
@@ -33,7 +42,7 @@ collapse_vars_2: {
         var a = "FAIL";
         try {
             a = "PASS";
-            [ ...42, "PASS"].slice();
+            [ ...42, "PASS" ].slice();
         } catch (e) {
             console.log(a);
         }
@@ -49,7 +58,7 @@ collapse_vars_3: {
     input: {
         var a = "FAIL";
         try {
-            [ ...(a = "PASS", 42), "PASS"].slice();
+            [ ...(a = "PASS", 42), "PASS" ].slice();
         } catch (e) {
             console.log(a);
         }
@@ -57,7 +66,7 @@ collapse_vars_3: {
     expect: {
         var a = "FAIL";
         try {
-            [ ...(a = "PASS", 42), "PASS"].slice();
+            [ ...(a = "PASS", 42), "PASS" ].slice();
         } catch (e) {
             console.log(a);
         }
@@ -147,7 +156,7 @@ dont_inline: {
     node_version: ">=6"
 }
 
-do_inline: {
+do_inline_1: {
     options = {
         inline: true,
         spreads: true,
@@ -159,6 +168,46 @@ do_inline: {
     }
     expect: {
         console.log(("FAIL", "PASS"));
+    }
+    expect_stdout: "PASS"
+    node_version: ">=6"
+}
+
+do_inline_2: {
+    options = {
+        inline: true,
+        side_effects: true,
+    }
+    input: {
+        (function() {
+            (function() {
+                console.log("PASS");
+            })(..."");
+        })();
+    }
+    expect: {
+        [] = [ ..."" ],
+        console.log("PASS");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=6"
+}
+
+do_inline_3: {
+    options = {
+        if_return: true,
+        inline: true,
+    }
+    input: {
+        (function() {
+            (function() {
+                while (console.log("PASS"));
+            })(..."");
+        })();
+    }
+    expect: {
+        var [] = [ ..."" ];
+        while (console.log("PASS"));
     }
     expect_stdout: "PASS"
     node_version: ">=6"
@@ -201,7 +250,29 @@ drop_empty_call_2: {
     node_version: ">=6"
 }
 
-convert_hole: {
+convert_hole_array: {
+    options = {
+        spreads: true,
+    }
+    input: {
+        [ ...[ "PASS", , 42 ] ].forEach(function(a) {
+            console.log(a);
+        });
+    }
+    expect: {
+        [ "PASS", void 0, 42 ].forEach(function(a) {
+            console.log(a);
+        });
+    }
+    expect_stdout: [
+        "PASS",
+        "undefined",
+        "42",
+    ]
+    node_version: ">=6"
+}
+
+convert_hole_call: {
     options = {
         spreads: true,
     }
@@ -341,7 +412,7 @@ convert_setter: {
             console.log(k, o[k]);
     }
     expect_stdout: "PASS undefined"
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 keep_getter_1: {
@@ -370,7 +441,7 @@ keep_getter_1: {
         });
     }
     expect_stdout: "PASS"
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 keep_getter_2: {
@@ -399,7 +470,7 @@ keep_getter_2: {
         "foo",
         "bar",
     ]
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 keep_getter_3: {
@@ -429,7 +500,7 @@ keep_getter_3: {
         });
     }
     expect_stdout: "PASS"
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 keep_getter_4: {
@@ -460,7 +531,7 @@ keep_getter_4: {
         });
     }
     expect_stdout: "PASS"
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 keep_accessor: {
@@ -508,7 +579,7 @@ keep_accessor: {
         "q undefined",
         "r null",
     ]
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 object_key_order_1: {
@@ -538,7 +609,7 @@ object_key_order_1: {
         "a 3",
         "b 2",
     ]
-    node_version: ">=8 <=10"
+    node_version: ">=8.3.0 <=10"
 }
 
 object_key_order_2: {
@@ -568,7 +639,7 @@ object_key_order_2: {
         "a 3",
         "b 2",
     ]
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 object_key_order_3: {
@@ -598,7 +669,7 @@ object_key_order_3: {
         "a 3",
         "b 2",
     ]
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 object_key_order_4: {
@@ -628,7 +699,7 @@ object_key_order_4: {
         "a 3",
         "b 2",
     ]
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 object_spread_array: {
@@ -654,7 +725,7 @@ object_spread_array: {
         "0 foo",
         "1 bar",
     ]
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 object_spread_string: {
@@ -681,7 +752,7 @@ object_spread_string: {
         "1 o",
         "2 o",
     ]
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 unused_var_side_effects: {
@@ -711,7 +782,7 @@ unused_var_side_effects: {
         });
     }
     expect_stdout: "PASS"
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 unsafe_join_1: {
@@ -793,7 +864,7 @@ issue_4329: {
         }[0]);
     }
     expect_stdout: "PASS"
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 issue_4331: {
@@ -871,7 +942,7 @@ issue_4345: {
         }[42]);
     }
     expect_stdout: "PASS"
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 issue_4361: {
@@ -901,7 +972,7 @@ issue_4361: {
         "foo",
         "undefined",
     ]
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 issue_4363: {
@@ -922,7 +993,7 @@ issue_4363: {
         });
     }
     expect_stdout: "PASS"
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 issue_4556: {
@@ -994,7 +1065,7 @@ issue_4849: {
         }()));
     }
     expect_stdout: "object"
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 issue_4882_1: {
@@ -1026,7 +1097,7 @@ issue_4882_1: {
         "PASS",
         "undefined",
     ]
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 issue_4882_2: {
@@ -1052,7 +1123,7 @@ issue_4882_2: {
         "42",
         "PASS",
     ]
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 issue_4882_3: {
@@ -1082,7 +1153,7 @@ issue_4882_3: {
         "PASS",
         "42",
     ]
-    node_version: ">=8"
+    node_version: ">=8.3.0"
 }
 
 issue_5006: {
@@ -1102,5 +1173,83 @@ issue_5006: {
         }(...[], "FAIL 1") || "PASS");
     }
     expect_stdout: "PASS"
+    node_version: ">=6"
+}
+
+issue_5382: {
+    options = {
+        side_effects: true,
+    }
+    input: {
+        ({
+            f() {
+                ({ ...this });
+            },
+            get p() {
+                console.log("PASS");
+            },
+        }).f();
+    }
+    expect: {
+        ({
+            f() {
+                ({ ...this });
+            },
+            get p() {
+                console.log("PASS");
+            },
+        }).f();
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8.3.0"
+}
+
+issue_5602: {
+    options = {
+        collapse_vars: true,
+        conditionals: true,
+        evaluate: true,
+        if_return: true,
+        inline: true,
+        passes: 2,
+        sequences: true,
+        spreads: true,
+        unused: true,
+    }
+    input: {
+        (function() {
+            try {
+                var b = function(c) {
+                    if (c)
+                        return FAIL;
+                    var d = 42;
+                }(...[ null, A = 0 ]);
+            } catch (e) {
+                b();
+            }
+        })();
+        console.log(A);
+    }
+    expect: {
+        (function() {
+            try {
+                var b = void (A = 0);
+            } catch (e) {
+                b();
+            }
+        })(),
+        console.log(A);
+    }
+    expect_stdout: "0"
+    expect_warnings: [
+        "INFO: Dropping unused variable d [test/compress/spreads.js:6,24]",
+        "INFO: Collapsing c [test/compress/spreads.js:4,24]",
+        "INFO: Dropping unused variable c [test/compress/spreads.js:3,33]",
+        "INFO: pass 0: last_count: Infinity, count: 27",
+        "WARN: Condition always false [test/compress/spreads.js:4,20]",
+        "INFO: Collapsing null [test/compress/spreads.js:7,23]",
+        "INFO: Collapsing 0 [test/compress/spreads.js:3,24]",
+        "INFO: pass 1: last_count: 27, count: 22",
+    ]
     node_version: ">=6"
 }

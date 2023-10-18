@@ -2631,13 +2631,14 @@ issue_3999: {
     ]
 }
 
-issue_4001: {
+issue_4001_1: {
     options = {
         collapse_vars: true,
         ie: true,
         inline: true,
         reduce_vars: true,
         sequences: true,
+        side_effects: false,
         toplevel: true,
         unused: true,
     }
@@ -2660,7 +2661,42 @@ issue_4001: {
             return a;
         }
         var a;
-        console.log((a = 42, void f()[42], void function a() {}));
+        console.log((a = 42, f()[42], void f, void function a() {}));
+    }
+    expect_stdout: "undefined"
+}
+
+issue_4001_2: {
+    options = {
+        collapse_vars: true,
+        ie: true,
+        inline: true,
+        reduce_vars: true,
+        sequences: true,
+        side_effects: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        console.log(function(a) {
+            function f() {
+                return a;
+                var b;
+            }
+            var c = f();
+            (function g() {
+                c[42];
+                f;
+            })();
+            (function a() {});
+        }(42));
+    }
+    expect: {
+        function f() {
+            return a;
+        }
+        var a;
+        console.log((a = 42, void f()[42]));
     }
     expect_stdout: "undefined"
 }
@@ -3109,9 +3145,9 @@ issue_5081_call: {
         }));
     }
     expect: {
-        function f(b) {
+        function f(a) {
             // IE5-10: TypeError: Function expected
-            return b(b = "A") + (b += "SS");
+            return a(a = "A") + (a += "SS");
         }
         console.log(f(function() {
             return "P";
@@ -3161,8 +3197,8 @@ issue_5081_property_access: {
         console.log(f({ A: "P" }));
     }
     expect: {
-        function f(b) {
-            return b[b = "A"] + (b += "SS");
+        function f(a) {
+            return a[a = "A"] + (a += "SS");
         }
         // IE9-11: undefinedASS
         console.log(f({ A: "P" }));
@@ -3191,4 +3227,250 @@ issue_5081_property_access_ie: {
         console.log(f({ A: "P" }));
     }
     expect_stdout: "PASS"
+}
+
+issue_5269_1: {
+    options = {
+        ie: false,
+        inline: true,
+        toplevel: true,
+    }
+    input: {
+        "use strict";
+        do {
+            (function() {
+                try {
+                    throw "PASS";
+                } catch (e) {
+                    console.log(e);
+                }
+            })();
+        } while (!console);
+    }
+    expect: {
+        "use strict";
+        do {
+            try {
+                throw "PASS";
+            } catch (e) {
+                console.log(e);
+            }
+        } while (!console);
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5269_1_ie: {
+    options = {
+        ie: true,
+        inline: true,
+        toplevel: true,
+    }
+    input: {
+        "use strict";
+        do {
+            (function() {
+                try {
+                    throw "PASS";
+                } catch (e) {
+                    console.log(e);
+                }
+            })();
+        } while (!console);
+    }
+    expect: {
+        "use strict";
+        do {
+            try {
+                throw "PASS";
+            } catch (e) {
+                console.log(e);
+            }
+        } while (!console);
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5269_2: {
+    options = {
+        ie: false,
+        inline: true,
+        toplevel: true,
+    }
+    input: {
+        for (var i = 0; i < 2; i++)
+            (function() {
+                console.log(e);
+                try {
+                    console;
+                } catch (e) {
+                    var e = "FAIL 1";
+                }
+                e = "FAIL 2";
+                console;
+            })();
+    }
+    expect: {
+        for (var i = 0; i < 2; i++) {
+            e = void 0;
+            console.log(e);
+            try {
+                console;
+            } catch (e) {
+                var e = "FAIL 1";
+            }
+            e = "FAIL 2";
+            console;
+        }
+    }
+    expect_stdout: [
+        "undefined",
+        "undefined",
+    ]
+}
+
+issue_5269_2_ie: {
+    options = {
+        ie: true,
+        inline: true,
+        toplevel: true,
+    }
+    input: {
+        for (var i = 0; i < 2; i++)
+            (function() {
+                console.log(e);
+                try {
+                    console;
+                } catch (e) {
+                    var e = "FAIL 1";
+                }
+                e = "FAIL 2";
+                console;
+            })();
+    }
+    expect: {
+        for (var i = 0; i < 2; i++) {
+            e = void 0;
+            console.log(e);
+            try {
+                console;
+            } catch (e) {
+                var e = "FAIL 1";
+            }
+            e = "FAIL 2";
+            console;
+        }
+    }
+    expect_stdout: [
+        "undefined",
+        "undefined",
+    ]
+}
+
+issue_5269_3: {
+    options = {
+        ie: false,
+        inline: true,
+        toplevel: true,
+    }
+    input: {
+        e = "foo";
+        for (var i = 0; i < 2; i++)
+            (function() {
+                console.log(e);
+                try {
+                    console;
+                } catch (e) {
+                    e = "FAIL";
+                }
+                e = "bar";
+                console;
+            })();
+    }
+    expect: {
+        e = "foo";
+        for (var i = 0; i < 2; i++) {
+            console.log(e);
+            try {
+                console;
+            } catch (e) {
+                e = "FAIL";
+            }
+            e = "bar";
+            console;
+        }
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+    ]
+}
+
+issue_5269_3_ie: {
+    options = {
+        ie: true,
+        inline: true,
+        toplevel: true,
+    }
+    input: {
+        e = "foo";
+        for (var i = 0; i < 2; i++)
+            (function() {
+                console.log(e);
+                try {
+                    console;
+                } catch (e) {
+                    e = "FAIL";
+                }
+                e = "bar";
+                console;
+            })();
+    }
+    expect: {
+        e = "foo";
+        for (var i = 0; i < 2; i++) {
+            console.log(e);
+            try {
+                console;
+            } catch (e) {
+                e = "FAIL";
+            }
+            e = "bar";
+            console;
+        }
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+    ]
+}
+
+issue_5350: {
+    options = {
+        ie: false,
+        properties: true,
+        side_effects: true,
+    }
+    input: {
+        console.log(typeof f, [ 42, function f() {} ][0]);
+    }
+    expect: {
+        console.log(typeof f, 42);
+    }
+    expect_stdout: "undefined 42"
+}
+
+issue_5350_ie: {
+    options = {
+        ie: true,
+        properties: true,
+        side_effects: true,
+    }
+    input: {
+        console.log(typeof f, [ 42, function f() {} ][0]);
+    }
+    expect: {
+        console.log(typeof f, (function f() {}, 42));
+    }
+    expect_stdout: "undefined 42"
 }

@@ -19,11 +19,11 @@ merge: {
     expect: {
         var a = "foo";
         console.log(a);
-        function f(c) {
-            var c;
-            console.log(c);
-            c = "bar";
-            console.log(c);
+        function f(b) {
+            var b;
+            console.log(b);
+            b = "bar";
+            console.log(b);
         }
         f("baz");
         var d = "moo";
@@ -56,17 +56,17 @@ merge_toplevel: {
         console.log(d);
     }
     expect: {
-        var d = "foo";
-        console.log(d);
-        function f(c) {
-            var c;
-            console.log(c);
-            c = "bar";
-            console.log(c);
+        var a = "foo";
+        console.log(a);
+        function f(b) {
+            var b;
+            console.log(b);
+            b = "bar";
+            console.log(b);
         }
         f("baz");
-        var d = "moo";
-        console.log(d);
+        var a = "moo";
+        console.log(a);
     }
     expect_stdout: [
         "foo",
@@ -94,16 +94,16 @@ segment: {
         console.log(d);
     }
     expect: {
-        var d = "foo";
-        console.log(d);
-        for (var c, i = 0; i < 1; i++) {
-            var c = "bar";
-            console.log(c);
-            c = "baz";
-            console.log(c);
+        var a = "foo";
+        console.log(a);
+        for (var b, i = 0; i < 1; i++) {
+            var b = "bar";
+            console.log(b);
+            b = "baz";
+            console.log(b);
         }
-        var d = "moo";
-        console.log(d);
+        var a = "moo";
+        console.log(a);
     }
     expect_stdout: [
         "foo",
@@ -167,6 +167,158 @@ conditional_branch: {
         }());
     }
     expect_stdout: "PASS"
+}
+
+conditional_chain_1: {
+    options = {
+        merge_vars: true,
+    }
+    input: {
+        function f(a, b) {
+            var c, d;
+            if (a && (c = a))
+                console.log(c);
+            else
+                b || (d = b) ? console.log("foo") : console.log(d);
+        }
+        f("", null);
+        f("", true);
+        f(42, null);
+        f(42, true);
+    }
+    expect: {
+        function f(a, b) {
+            var a, a;
+            if (a && (a = a))
+                console.log(a);
+            else
+                b || (a = b) ? console.log("foo") : console.log(a);
+        }
+        f("", null);
+        f("", true);
+        f(42, null);
+        f(42, true);
+    }
+    expect_stdout: [
+        "null",
+        "foo",
+        "42",
+        "42",
+    ]
+}
+
+conditional_chain_2: {
+    options = {
+        merge_vars: true,
+    }
+    input: {
+        function f(a, b) {
+            var c, d;
+            if (a && (c = a))
+                console.log(c);
+            else
+                b || (d = b) ? console.log(c) : console.log(d);
+        }
+        f("", null);
+        f("", true);
+        f(42, null);
+        f(42, true);
+    }
+    expect: {
+        function f(a, b) {
+            var c, a;
+            if (a && (c = a))
+                console.log(c);
+            else
+                b || (a = b) ? console.log(c) : console.log(a);
+        }
+        f("", null);
+        f("", true);
+        f(42, null);
+        f(42, true);
+    }
+    expect_stdout: [
+        "null",
+        "undefined",
+        "42",
+        "42",
+    ]
+}
+
+conditional_chain_3: {
+    options = {
+        merge_vars: true,
+    }
+    input: {
+        function f(a, b) {
+            var c, d;
+            if (a && (c = a) || b || (d = b))
+                console.log(c);
+            else
+                console.log(d);
+        }
+        f("", null);
+        f("", true);
+        f(42, null);
+        f(42, true);
+    }
+    expect: {
+        function f(a, b) {
+            var c, a;
+            if (a && (c = a) || b || (a = b))
+                console.log(c);
+            else
+                console.log(a);
+        }
+        f("", null);
+        f("", true);
+        f(42, null);
+        f(42, true);
+    }
+    expect_stdout: [
+        "null",
+        "undefined",
+        "42",
+        "42",
+    ]
+}
+
+conditional_chain_4: {
+    options = {
+        merge_vars: true,
+    }
+    input: {
+        function f(a, b) {
+            var c, d;
+            if (a && b ? c = a : d = b)
+                console.log(c);
+            else
+                console.log(d);
+        }
+        f("", null);
+        f("", true);
+        f(42, null);
+        f(42, true);
+    }
+    expect: {
+        function f(a, b) {
+            var c, d;
+            if (a && b ? c = a : d = b)
+                console.log(c);
+            else
+                console.log(d);
+        }
+        f("", null);
+        f("", true);
+        f(42, null);
+        f(42, true);
+    }
+    expect_stdout: [
+        "null",
+        "undefined",
+        "null",
+        "42",
+    ]
 }
 
 if_branch: {
@@ -253,6 +405,7 @@ read_before_assign_1: {
         inline: true,
         merge_vars: true,
         sequences: true,
+        side_effects: true,
         toplevel: true,
     }
     input: {
@@ -298,6 +451,89 @@ read_before_assign_2: {
     expect_stdout: "PASS"
 }
 
+collapse_vars_1: {
+    options = {
+        collapse_vars: true,
+        merge_vars: true,
+        toplevel: true,
+    }
+    input: {
+        var a = a && a.p;
+        var b = "PASS";
+        var b = b && console.log(b);
+    }
+    expect: {
+        var a = a && a.p;
+        var a;
+        var a = (a = "PASS") && console.log(a);
+    }
+    expect_stdout: "PASS"
+}
+
+collapse_vars_2: {
+    options = {
+        collapse_vars: true,
+        merge_vars: true,
+    }
+    input: {
+        "use strict";
+        var log = console.log;
+        (function g(a) {
+            var b = a;
+            var c = Math.random();
+            var c = b;
+            log(c);
+            return c;
+        })("PASS");
+    }
+    expect: {
+        "use strict";
+        var log = console.log;
+        (function g(a) {
+            var a = a;
+            var c = Math.random();
+            var c;
+            log(c = a);
+            return c;
+        })("PASS");
+    }
+    expect_stdout: "PASS"
+}
+
+not_redefined: {
+    options = {
+        inline: true,
+        join_vars: true,
+        merge_vars: true,
+        reduce_vars: true,
+        unused: true,
+        varify: true,
+    }
+    input: {
+        var log = console.log;
+        (function() {
+            return f("PASS");
+            function f(a) {
+                const b = a;
+                const c = log(b);
+                const d = log;
+                c && log(d);
+            }
+        })();
+    }
+    expect: {
+        var log = console.log;
+        (function() {
+            return a = "PASS",
+                a = log(a),
+                d = log,
+                void (a && log(d));
+            var a, d;
+        })();
+    }
+    expect_stdout: "PASS"
+}
+
 issue_4103: {
     options = {
         merge_vars: true,
@@ -325,7 +561,7 @@ issue_4103: {
     ]
 }
 
-issue_4107: {
+issue_4107_1: {
     options = {
         keep_fargs: false,
         merge_vars: true,
@@ -337,6 +573,38 @@ issue_4107: {
             function f(b, b, c) {
                 var d = 1 && a, a = console || c;
                 console.log(typeof a);
+            }
+            f();
+        })();
+        console.log(typeof a);
+    }
+    expect: {
+        (function() {
+            (function(c) {
+                c = console || c;
+                console.log(typeof c);
+            })();
+        })();
+        console.log(typeof a);
+    }
+    expect_stdout: [
+        "object",
+        "undefined",
+    ]
+}
+
+issue_4107_2: {
+    options = {
+        keep_fargs: false,
+        merge_vars: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        (function() {
+            function f(b, b, a) {
+                var d = 1 && c, c = console || a;
+                console.log(typeof c);
             }
             f();
         })();
@@ -476,9 +744,9 @@ issue_4112: {
             try {
                 throw 42;
             } catch (e) {
-                var a = e;
-                for (e in a);
-                a = function() {};
+                var o = e;
+                for (e in o);
+                function a() {}
                 console.log(typeof a);
                 return a;
             }
@@ -538,12 +806,12 @@ cross_branch_1_1: {
     expect: {
         var a;
         function f() {
-            var y, y;
+            var x, x;
             if (a)
-                y = "foo";
-            console.log(y);
-            y = "bar";
-            console.log(y);
+                x = "foo";
+            console.log(x);
+            x = "bar";
+            console.log(x);
         }
         a = 0;
         f();
@@ -581,13 +849,13 @@ cross_branch_1_2: {
     expect: {
         var a;
         function f() {
-            var y, y;
+            var x, x;
             if (a) {
-                y = "foo";
-                console.log(y);
+                x = "foo";
+                console.log(x);
             }
-            y = "bar";
-            console.log(y);
+            x = "bar";
+            console.log(x);
         }
         a = 0;
         f();
@@ -624,13 +892,13 @@ cross_branch_1_3: {
     expect: {
         var a;
         function f() {
-            var y, y;
+            var x, x;
             if (a) {
-                y = "foo";
-                console.log(y);
-                y = "bar";
+                x = "foo";
+                console.log(x);
+                x = "bar";
             }
-            console.log(y);
+            console.log(x);
         }
         a = 0;
         f();
@@ -666,12 +934,12 @@ cross_branch_1_4: {
     expect: {
         var a;
         function f() {
-            var y, y;
-            y = "foo";
+            var x, x;
+            x = "foo";
             if (a)
-                console.log(y);
-            y = "bar";
-            console.log(y);
+                console.log(x);
+            x = "bar";
+            console.log(x);
         }
         a = 0;
         f();
@@ -751,12 +1019,12 @@ cross_branch_1_6: {
     expect: {
         var a;
         function f() {
-            var y, y;
-            y = "foo";
+            var x, x;
+            x = "foo";
             if (a) {
-                console.log(y);
-                y = "bar";
-                console.log(y);
+                console.log(x);
+                x = "bar";
+                console.log(x);
             }
         }
         a = 0;
@@ -835,12 +1103,12 @@ cross_branch_1_8: {
     expect: {
         var a;
         function f() {
-            var y, y;
-            y = "foo";
-            console.log(y);
+            var x, x;
+            x = "foo";
+            console.log(x);
             if (a) {
-                y = "bar";
-                console.log(y);
+                x = "bar";
+                console.log(x);
             }
         }
         a = 0;
@@ -877,12 +1145,12 @@ cross_branch_1_9: {
     expect: {
         var a;
         function f() {
-            var y, y;
-            y = "foo";
-            console.log(y);
-            y = "bar";
+            var x, x;
+            x = "foo";
+            console.log(x);
+            x = "bar";
             if (a)
-                console.log(y);
+                console.log(x);
         }
         a = 0;
         f();
@@ -924,14 +1192,14 @@ cross_branch_2a_1: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
+            var x, x;
             if (a) {
                 if (b)
-                    y = "foo";
-                console.log(y);
+                    x = "foo";
+                console.log(x);
             }
-            y = "bar";
-            console.log(y);
+            x = "bar";
+            console.log(x);
         }
         a = 0, b = 0;
         f();
@@ -980,14 +1248,14 @@ cross_branch_2a_2: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
+            var x, x;
             if (a) {
-                y = "foo";
+                x = "foo";
                 if (b)
-                    console.log(y);
+                    console.log(x);
             }
-            y = "bar";
-            console.log(y);
+            x = "bar";
+            console.log(x);
         }
         a = 0, b = 0;
         f();
@@ -1035,14 +1303,14 @@ cross_branch_2a_3: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
+            var x, x;
             if (a) {
                 if (b)
-                    y = "foo";
-                console.log(y);
-                y = "bar";
+                    x = "foo";
+                console.log(x);
+                x = "bar";
             }
-            console.log(y);
+            console.log(x);
         }
         a = 0, b = 0;
         f();
@@ -1092,15 +1360,15 @@ cross_branch_2a_4: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
+            var x, x;
             if (a) {
                 if (b) {
-                    y = "foo";
-                    console.log(y);
+                    x = "foo";
+                    console.log(x);
                 }
-                y = "bar";
+                x = "bar";
             }
-            console.log(y);
+            console.log(x);
         }
         a = 0, b = 0;
         f();
@@ -1148,14 +1416,14 @@ cross_branch_2a_5: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
+            var x, x;
             if (a) {
-                y = "foo";
+                x = "foo";
                 if (b)
-                    console.log(y);
-                y = "bar";
+                    console.log(x);
+                x = "bar";
             }
-            console.log(y);
+            console.log(x);
         }
         a = 0, b = 0;
         f();
@@ -1427,13 +1695,13 @@ cross_branch_2a_10: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
-            y = "foo";
+            var x, x;
+            x = "foo";
             if (a) {
                 if (b)
-                    console.log(y);
-                y = "bar";
-                console.log(y);
+                    console.log(x);
+                x = "bar";
+                console.log(x);
             }
         }
         a = 0, b = 0;
@@ -1590,13 +1858,13 @@ cross_branch_2a_13: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
-            y = "foo";
+            var x, x;
+            x = "foo";
             if (a) {
-                console.log(y);
+                console.log(x);
                 if (b) {
-                    y = "bar";
-                    console.log(y);
+                    x = "bar";
+                    console.log(x);
                 }
             }
         }
@@ -1644,13 +1912,13 @@ cross_branch_2a_14: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
-            y = "foo";
+            var x, x;
+            x = "foo";
             if (a) {
-                console.log(y);
-                y = "bar";
+                console.log(x);
+                x = "bar";
                 if (b)
-                    console.log(y);
+                    console.log(x);
             }
         }
         a = 0, b = 0;
@@ -1753,13 +2021,13 @@ cross_branch_2a_16: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
-            y = "foo";
-            console.log(y);
+            var x, x;
+            x = "foo";
+            console.log(x);
             if (a) {
-                y = "bar";
+                x = "bar";
                 if (b)
-                    console.log(y);
+                    console.log(x);
             }
         }
         a = 0, b = 0;
@@ -1807,13 +2075,13 @@ cross_branch_2b_1: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
+            var x, x;
             if (a)
-                y = "foo";
+                x = "foo";
             if (b)
-                console.log(y);
-            y = "bar";
-            console.log(y);
+                console.log(x);
+            x = "bar";
+            console.log(x);
         }
         a = 0, b = 0;
         f();
@@ -1918,13 +2186,13 @@ cross_branch_2b_3: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
+            var x, x;
             if (a)
-                y = "foo";
+                x = "foo";
             if (b) {
-                console.log(y);
-                y = "bar";
-                console.log(y);
+                console.log(x);
+                x = "bar";
+                console.log(x);
             }
         }
         a = 0, b = 0;
@@ -2028,13 +2296,13 @@ cross_branch_2b_5: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
+            var x, x;
             if (a)
-                y = "foo";
-            console.log(y);
+                x = "foo";
+            console.log(x);
             if (b) {
-                y = "bar";
-                console.log(y);
+                x = "bar";
+                console.log(x);
             }
         }
         a = 0, b = 0;
@@ -2141,14 +2409,14 @@ cross_branch_2b_7: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
+            var x, x;
             if (a) {
-                y = "foo";
-                console.log(y);
+                x = "foo";
+                console.log(x);
             }
             if (b) {
-                y = "bar";
-                console.log(y);
+                x = "bar";
+                console.log(x);
             }
         }
         a = 0, b = 0;
@@ -2195,13 +2463,13 @@ cross_branch_2b_8: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
+            var x, x;
             if (a)
-                y = "foo";
-            console.log(y);
-            y = "bar";
+                x = "foo";
+            console.log(x);
+            x = "bar";
             if (b)
-                console.log(y);
+                console.log(x);
         }
         a = 0, b = 0;
         f();
@@ -2250,14 +2518,14 @@ cross_branch_2b_9: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
+            var x, x;
             if (a) {
-                y = "foo";
-                console.log(y);
+                x = "foo";
+                console.log(x);
             }
-            y = "bar";
+            x = "bar";
             if (b)
-                console.log(y);
+                console.log(x);
         }
         a = 0, b = 0;
         f();
@@ -2304,14 +2572,14 @@ cross_branch_2b_10: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
+            var x, x;
             if (a) {
-                y = "foo";
-                console.log(y);
-                y = "bar";
+                x = "foo";
+                console.log(x);
+                x = "bar";
             }
             if (b)
-                console.log(y);
+                console.log(x);
         }
         a = 0, b = 0;
         f();
@@ -2412,13 +2680,13 @@ cross_branch_2b_12: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
-            y = "foo";
+            var x, x;
+            x = "foo";
             if (a)
-                console.log(y);
+                console.log(x);
             if (b) {
-                y = "bar";
-                console.log(y);
+                x = "bar";
+                console.log(x);
             }
         }
         a = 0, b = 0;
@@ -2465,13 +2733,13 @@ cross_branch_2b_13: {
     expect: {
         var a, b;
         function f() {
-            var y, y;
-            y = "foo";
+            var x, x;
+            x = "foo";
             if (a)
-                console.log(y);
-            y = "bar";
+                console.log(x);
+            x = "bar";
             if (b)
-                console.log(y);
+                console.log(x);
         }
         a = 0, b = 0;
         f();
@@ -2620,11 +2888,11 @@ issue_4126_1: {
             try {
                 console.log("PASS");
             } catch (e) {
-                var c = a;
+                var b = a;
             } finally {
-                var c = c;
+                var a = b;
             }
-            console.log(c);
+            console.log(a);
         }
         f("FAIL");
     }
@@ -2816,11 +3084,11 @@ conditional_write: {
         console.log(b);
     }
     expect: {
-        var b = "FAIL", b;
+        var a = "FAIL", a;
         if (console)
-            b = "PASS";
-        b = [b, 42].join();
-        console.log(b);
+            a = "PASS";
+        a = [a, 42].join();
+        console.log(a);
     }
     expect_stdout: "PASS,42"
 }
@@ -2994,13 +3262,13 @@ issue_4168_use_strict: {
     expect: {
         "use strict";
         var o = {
-            f: function(d, e, f) {
-                var d = d.d;
-                var e = e.e;
-                var f = f.f;
+            f: function(a, b, c) {
+                var a = a.d;
+                var b = b.e;
+                var c = c.f;
                 this.g(arguments);
-                if (d)
-                    console.log(e, f);
+                if (a)
+                    console.log(b, c);
             },
             g: function(args) {
                 console.log(args[0], args[1], args[2]);
@@ -3228,10 +3496,10 @@ issue_4653: {
         f(a++ + (b = b), b |= console.log(a));
     }
     expect: {
-        var b = 1;
+        var b, a = 1;
         (function(c, d) {
             c || console.log(d);
-        })(+b + (b = void 0), b |= console.log(2));
+        })(+a + (b = b), b |= console.log(2));
     }
     expect_stdout: [
         "2",
@@ -3376,4 +3644,248 @@ issue_4956_2: {
         f(1);
     }
     expect_stdout: "42"
+}
+
+issue_5182: {
+    options = {
+        arrows: true,
+        collapse_vars: true,
+        evaluate: true,
+        hoist_props: true,
+        inline: true,
+        merge_vars: true,
+        passes: 4,
+        reduce_vars: true,
+        sequences: true,
+        side_effects: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        try {
+            var con = console;
+        } catch (x) {}
+        global.log = con.log;
+        var jump = function(x) {
+            console.log("JUMP:", x * 10);
+            return x + x;
+        };
+        var jump2 = jump;
+        var run = function(x) {
+            console.log("RUN:", x * -10);
+            return x * x;
+        };
+        var run2 = run;
+        var bar = (x, y) => {
+            console.log("BAR:", x + y);
+            return x - y;
+        };
+        var bar2 = bar;
+        var obj = {
+            foo: bar2,
+            go: run2,
+            not_used: jump2,
+        };
+        console.log(obj.foo(1, 2), global.log("PASS"));
+    }
+    expect: {
+        try {
+            var con = console;
+        } catch (x) {}
+        global.log = con.log,
+        console.log((console.log("BAR:", 3), -1), global.log("PASS"));
+    }
+    expect_stdout: [
+        "BAR: 3",
+        "PASS",
+        "-1 undefined",
+    ]
+    node_version: ">=4"
+}
+
+issue_5420: {
+    options = {
+        merge_vars: true,
+        toplevel: true,
+    }
+    input: {
+        do {
+            var a = "FAIL 1";
+            a && a.p;
+            a = "FAIL 2";
+            try {
+                continue;
+            } catch (e) {}
+            var b = "FAIL 3";
+        } while (console.log(b || "PASS"));
+    }
+    expect: {
+        do {
+            var a = "FAIL 1";
+            a && a.p;
+            a = "FAIL 2";
+            try {
+                continue;
+            } catch (e) {}
+            var b = "FAIL 3";
+        } while (console.log(b || "PASS"));
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5451: {
+    options = {
+        merge_vars: true,
+        toplevel: true,
+    }
+    input: {
+        A = 1;
+        var a = 1, b;
+        console.log(function f() {
+            return a-- && f(b = A, b);
+        }());
+    }
+    expect: {
+        A = 1;
+        var a = 1, b;
+        console.log(function f() {
+            return a-- && f(b = A, b);
+        }());
+    }
+    expect_stdout: "0"
+}
+
+issue_5471_1: {
+    options = {
+        conditionals: true,
+        inline: true,
+        merge_vars: true,
+        reduce_vars: true,
+        sequences: true,
+        side_effects: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a = "FAIL 1";
+        function f(b, c) {
+            function g() {
+                if (console)
+                    return 42;
+                else
+                    c = "FAIL 2";
+            }
+            var d = g();
+            console.log(c || "PASS");
+            var e = function h() {
+                while (b && e);
+            }();
+        }
+        f(a++) && a;
+    }
+    expect: {
+        var a = "FAIL 1";
+        var b, c, e;
+        b = +a,
+        function() {
+            if (console)
+                return;
+            c = "FAIL 2";
+        }(),
+        console.log(c || "PASS"),
+        e = function() {
+            while (b && e);
+        }();
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5471_2: {
+    options = {
+        conditionals: true,
+        evaluate: true,
+        inline: true,
+        merge_vars: true,
+        reduce_vars: true,
+        sequences: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a = "FAIL 1";
+        function f(b, c) {
+            function g() {
+                if (console)
+                    return 42;
+                else
+                    c = "FAIL 2";
+            }
+            var d = g();
+            console.log(c || "PASS");
+            var e = function h() {
+                while (b && e);
+            }();
+        }
+        f(a++) && a;
+    }
+    expect: {
+        var a = "FAIL 1";
+        var b, c, e;
+        b = +a,
+        function() {
+            if (console)
+                return;
+            c = "FAIL 2";
+        }(),
+        console.log(c || "PASS"),
+        e = function() {
+            while (b && e);
+        }(),
+        void 0;
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5714: {
+    options = {
+        inline: true,
+        join_vars: true,
+        loops: true,
+        merge_vars: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        console.log(function() {
+            var i = 1;
+            while (i--) {
+                var a = function f(b) {
+                    console.log(b);
+                    var c = function(d) {
+                        console.log(typeof d);
+                    }(console);
+                }();
+                var e = 42;
+            }
+            return e;
+        }());
+    }
+    expect: {
+        "use strict";
+        console.log(function() {
+            for (var i = 1; i--;) {
+                var b = void 0;
+                console.log(b);
+                b = console,
+                console.log(typeof b);
+                var e = 42;
+            }
+            return e;
+        }());
+    }
+    expect_stdout: [
+        "undefined",
+        "object",
+        "42",
+    ]
 }

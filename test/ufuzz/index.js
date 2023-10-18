@@ -128,7 +128,7 @@ for (var i = 2; i < process.argv.length; ++i) {
 
 var SUPPORT = function(matrix) {
     for (var name in matrix) {
-        matrix[name] = typeof sandbox.run_code(matrix[name]) == "string";
+        matrix[name] = !sandbox.is_error(sandbox.run_code(matrix[name]));
     }
     return matrix;
 }({
@@ -140,6 +140,7 @@ var SUPPORT = function(matrix) {
     class: "class C { f() {} }",
     class_field: "class C { p = 0; }",
     class_private: "class C { #f() {} }",
+    class_static_init: "class C { static {} }",
     computed_key: "({[0]: 0});",
     const_block: "var a; { const a = 0; }",
     default_value: "[ a = 0 ] = [];",
@@ -252,7 +253,7 @@ BINARY_OPS = BINARY_OPS.concat(BINARY_OPS);
 if (SUPPORT.exponentiation) BINARY_OPS.push("**");
 BINARY_OPS = BINARY_OPS.concat(BINARY_OPS);
 BINARY_OPS = BINARY_OPS.concat(BINARY_OPS);
-BINARY_OPS.push(" in ");
+BINARY_OPS.push(" in ", " instanceof ");
 
 var ASSIGNMENTS = [ "=" ];
 ASSIGNMENTS = ASSIGNMENTS.concat(ASSIGNMENTS);
@@ -370,9 +371,16 @@ var in_class = 0;
 var called = Object.create(null);
 var labels = 10000;
 
-function rng(max) {
+function rng(limit) {
     var r = randomBytes(2).readUInt16LE(0) / 65536;
-    return Math.floor(max * r);
+    return Math.floor(limit * r);
+}
+
+function get_num(max) {
+    if (rng(max + 1) == 0) return 0;
+    var i = 1;
+    while (i < max && rng(2)) i++;
+    return i;
 }
 
 function strictMode() {
@@ -405,7 +413,7 @@ function createTopLevelCode() {
     unique_vars.length = 0;
     classes.length = 0;
     allow_this = true;
-    async = false;
+    async = SUPPORT.async && rng(200) == 0;
     has_await = false;
     export_default = false;
     generator = false;
@@ -413,7 +421,7 @@ function createTopLevelCode() {
     funcs = 0;
     clazz = 0;
     imports = 0;
-    in_class = 0;
+    in_class = async;
     called = Object.create(null);
     var s = [
         strictMode(),
@@ -424,7 +432,7 @@ function createTopLevelCode() {
         if (rng(2)) {
             s.push(createStatements(3, MAX_GENERATION_RECURSION_DEPTH, CANNOT_THROW, CANNOT_BREAK, CANNOT_CONTINUE, CANNOT_RETURN, 0));
         } else {
-            s.push(createFunctions(rng(MAX_GENERATED_TOPLEVELS_PER_RUN) + 1, MAX_GENERATION_RECURSION_DEPTH, DEFUN_OK, CANNOT_THROW, 0));
+            s.push(createFunctions(MAX_GENERATED_TOPLEVELS_PER_RUN, MAX_GENERATION_RECURSION_DEPTH, DEFUN_OK, CANNOT_THROW, 0));
         }
     });
     // preceding `null` makes for a cleaner output (empty string still shows up etc)
@@ -437,7 +445,7 @@ function createTopLevelCode() {
 function createFunctions(n, recurmax, allowDefun, canThrow, stmtDepth) {
     if (--recurmax < 0) { return ";"; }
     var s = "";
-    while (n-- > 0) {
+    for (var i = get_num(n - 1) + 1; --i >= 0;) {
         s += createFunction(recurmax, allowDefun, canThrow, stmtDepth) + "\n";
     }
     return s;
@@ -454,7 +462,7 @@ function createParams(was_async, was_generator, noDuplicate) {
     if (!generator) generator = was_generator;
     var len = unique_vars.length;
     var params = [];
-    for (var n = rng(4); --n >= 0;) {
+    for (var i = get_num(3); --i >= 0;) {
         var name = createVarName(MANDATORY);
         if (noDuplicate || in_class) unique_vars.push(name);
         params.push(name);
@@ -469,7 +477,7 @@ function createArgs(recurmax, stmtDepth, canThrow, noTemplate) {
     recurmax--;
     if (SUPPORT.template && !noTemplate && rng(20) == 0) return createTemplateLiteral(recurmax, stmtDepth, canThrow);
     var args = [];
-    for (var n = rng(4); --n >= 0;) switch (SUPPORT.spread ? rng(50) : 3) {
+    for (var i = get_num(3); --i >= 0;) switch (SUPPORT.spread ? rng(50) : 3) {
       case 0:
       case 1:
         var name = getVarName();
@@ -849,7 +857,7 @@ function createFunction(recurmax, allowDefun, canThrow, stmtDepth) {
         s.push(defns());
         if (rng(5) === 0) {
             // functions with functions. lower the recursion to prevent a mess.
-            s.push(createFunctions(rng(5) + 1, Math.ceil(recurmax * 0.7), DEFUN_OK, canThrow, stmtDepth));
+            s.push(createFunctions(5, Math.ceil(recurmax * 0.7), DEFUN_OK, canThrow, stmtDepth));
         } else {
             // functions with statements
             s.push(_createStatements(3, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth));
@@ -879,9 +887,9 @@ function createFunction(recurmax, allowDefun, canThrow, stmtDepth) {
 }
 
 function _createStatements(n, recurmax, canThrow, canBreak, canContinue, cannotReturn, stmtDepth) {
-    if (--recurmax < 0) { return ";"; }
+    if (--recurmax < 0) return ";";
     var s = "";
-    while (--n > 0) {
+    for (var i = get_num(n); --i >= 0;) {
         s += createStatement(recurmax, canThrow, canBreak, canContinue, cannotReturn, stmtDepth) + "\n";
     }
     return s;
@@ -962,7 +970,7 @@ function createStatement(recurmax, canThrow, canBreak, canContinue, cannotReturn
     switch (target) {
       case STMT_BLOCK:
         var label = createLabel(canBreak);
-        return label.target + "{" + createStatements(rng(5) + 1, recurmax, canThrow, label.break, canContinue, cannotReturn, stmtDepth) + "}";
+        return label.target + "{" + createStatements(5, recurmax, canThrow, label.break, canContinue, cannotReturn, stmtDepth) + "}";
       case STMT_IF_ELSE:
         return "if (" + createExpression(recurmax, COMMA_OK, stmtDepth, canThrow) + ")" + createStatement(recurmax, canThrow, canBreak, canContinue, cannotReturn, stmtDepth) + (rng(2) ? " else " + createStatement(recurmax, canThrow, canBreak, canContinue, cannotReturn, stmtDepth) : "");
       case STMT_DO_WHILE:
@@ -1075,7 +1083,7 @@ function createStatement(recurmax, canThrow, canBreak, canContinue, cannotReturn
                     s += " * as " + createImportAlias();
                 } else {
                     var names = [];
-                    for (var i = rng(4); --i >= 0;) {
+                    for (var i = get_num(3); --i >= 0;) {
                         var name = createImportAlias();
                         names.push(rng(2) ? getDotKey() + " as " + name : name);
                     }
@@ -1134,7 +1142,7 @@ function createStatement(recurmax, canThrow, canBreak, canContinue, cannotReturn
         }
       case STMT_FUNC_EXPR:
         // "In non-strict mode code, functions can only be declared at top level, inside a block, or ..."
-        // (dont both with func decls in `if`; it's only a parser thing because you cant call them without a block)
+        // (don't make func decls in `if`; it's only a parser thing because you can't call them without a block)
         return "{" + createFunction(recurmax, NO_DEFUN, canThrow, stmtDepth) + "}";
       case STMT_TRY:
         // catch var could cause some problems
@@ -1181,7 +1189,11 @@ function createStatement(recurmax, canThrow, canBreak, canContinue, cannotReturn
                 unique_vars.length = unique_len;
             });
         }
-        if (n !== 0) s += " finally { " + createStatements(3, recurmax, canThrow, canBreak, canContinue, cannotReturn, stmtDepth) + " }";
+        if (n !== 0) s += [
+            " finally { ",
+            createStatements(5, recurmax, canThrow, canBreak, canContinue, cannotReturn, stmtDepth),
+            " }",
+        ].join("");
         return s;
       case STMT_C:
         return "c = c + 1;";
@@ -1199,7 +1211,7 @@ function createSwitchParts(recurmax, n, canThrow, canBreak, canContinue, cannotR
         if (hadDefault || rng(5) > 0) {
             s.push(
                 "case " + createExpression(recurmax, NO_COMMA, stmtDepth, canThrow) + ":",
-                _createStatements(rng(3) + 1, recurmax, canThrow, canBreak, canContinue, cannotReturn, stmtDepth),
+                _createStatements(3, recurmax, canThrow, canBreak, canContinue, cannotReturn, stmtDepth),
                 rng(10) > 0 ? " break;" : "/* fall-through */",
                 ""
             );
@@ -1207,7 +1219,7 @@ function createSwitchParts(recurmax, n, canThrow, canBreak, canContinue, cannotR
             hadDefault = true;
             s.push(
                 "default:",
-                _createStatements(rng(3) + 1, recurmax, canThrow, canBreak, canContinue, cannotReturn, stmtDepth),
+                _createStatements(3, recurmax, canThrow, canBreak, canContinue, cannotReturn, stmtDepth),
                 ""
             );
         }
@@ -1338,7 +1350,7 @@ function _createExpression(recurmax, noComma, stmtDepth, canThrow) {
                             "(" + params + "{",
                             strictMode(),
                             defns(),
-                            _createStatements(rng(5) + 1, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth)
+                            _createStatements(5, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth)
                         );
                         suffix = "})";
                     } else {
@@ -1370,7 +1382,7 @@ function _createExpression(recurmax, noComma, stmtDepth, canThrow) {
                 s.push(
                     "(" + makeFunction(name) + "(){",
                     strictMode(),
-                    createStatements(rng(5) + 1, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth),
+                    createStatements(5, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth),
                     rng(2) ? "})" : "})()" + invokeGenerator(save_generator)
                 );
             }
@@ -1379,7 +1391,7 @@ function _createExpression(recurmax, noComma, stmtDepth, canThrow) {
             s.push(
                 "+" + makeFunction(name) + "(){",
                 strictMode(),
-                createStatements(rng(5) + 1, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth),
+                createStatements(5, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth),
                 "}()" + invokeGenerator(save_generator)
             );
             break;
@@ -1387,7 +1399,7 @@ function _createExpression(recurmax, noComma, stmtDepth, canThrow) {
             s.push(
                 "!" + makeFunction(name) + "(){",
                 strictMode(),
-                createStatements(rng(5) + 1, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth),
+                createStatements(5, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth),
                 "}()" + invokeGenerator(save_generator)
             );
             break;
@@ -1395,7 +1407,7 @@ function _createExpression(recurmax, noComma, stmtDepth, canThrow) {
             s.push(
                 "void " + makeFunction(name) + "(){",
                 strictMode(),
-                createStatements(rng(5) + 1, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth),
+                createStatements(5, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth),
                 "}()" + invokeGenerator(save_generator)
             );
             break;
@@ -1411,10 +1423,10 @@ function _createExpression(recurmax, noComma, stmtDepth, canThrow) {
                 var add_new_target = SUPPORT.new_target && VALUES.indexOf("new.target") < 0;
                 if (add_new_target) VALUES.push("new.target");
                 s.push(defns());
-                if (instantiate) for (var i = rng(4); --i >= 0;) {
+                if (instantiate) for (var i = get_num(3); --i >= 0;) {
                     s.push((in_class ? "if (this) " : "") + createThisAssignment(recurmax, stmtDepth, canThrow));
                 }
-                s.push(_createStatements(rng(5) + 1, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth));
+                s.push(_createStatements(5, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth));
                 if (add_new_target) VALUES.splice(VALUES.indexOf("new.target"), 1);
             });
             generator = save_generator;
@@ -1560,7 +1572,7 @@ function _createExpression(recurmax, noComma, stmtDepth, canThrow) {
 function createArrayLiteral(recurmax, stmtDepth, canThrow) {
     recurmax--;
     var arr = [];
-    for (var i = rng(6); --i >= 0;) switch (SUPPORT.spread ? rng(50) : 3 + rng(47)) {
+    for (var i = get_num(5); --i >= 0;) switch (SUPPORT.spread ? rng(50) : 3 + rng(47)) {
       case 0:
       case 1:
         var name = getVarName();
@@ -1589,7 +1601,7 @@ function createTemplateLiteral(recurmax, stmtDepth, canThrow) {
     recurmax--;
     var s = [];
     addText();
-    for (var i = rng(6); --i >= 0;) {
+    for (var i = get_num(5); --i >= 0;) {
         s.push("${", createExpression(recurmax, COMMA_OK, stmtDepth, canThrow), "}");
         addText();
     }
@@ -1744,7 +1756,7 @@ function createObjectFunction(recurmax, stmtDepth, canThrow, internal, isClazz) 
             s.push(_createStatements(2, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CANNOT_RETURN, stmtDepth));
             if (internal == "super") s.push("super" + createArgs(recurmax, stmtDepth, canThrow, NO_TEMPLATE) + ";");
             allow_this = save_allow;
-            if (/^(constructor|super)$/.test(internal) || rng(10) == 0) for (var i = rng(4); --i >= 0;) {
+            if (/^(constructor|super)$/.test(internal) || rng(10) == 0) for (var i = get_num(3); --i >= 0;) {
                 s.push(rng(2) ? createSuperAssignment(recurmax, stmtDepth, canThrow) : createThisAssignment(recurmax, stmtDepth, canThrow));
             }
             s.push(_createStatements(2, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CAN_RETURN, stmtDepth), "}");
@@ -1763,7 +1775,7 @@ function createObjectLiteral(recurmax, stmtDepth, canThrow) {
     var obj = [ "({" ];
     var offset = SUPPORT.spread_object ? 0 : SUPPORT.computed_key ? 2 : 4;
     var has_proto = false;
-    for (var i = rng(6); --i >= 0;) switch (offset + rng(50 - offset)) {
+    for (var i = get_num(5); --i >= 0;) switch (offset + rng(50 - offset)) {
       case 0:
         obj.push("..." + getVarName() + ",");
         break;
@@ -1805,12 +1817,12 @@ function createClassLiteral(recurmax, stmtDepth, canThrow, name) {
         if (canThrow && rng(20) == 0) {
             s += p;
         } else {
-            s += "(" + p + " && " + p + ".constructor === Function ? " + p + " : function() {})";
+            s += "(typeof " + p + ' == "function" && typeof ' + p + '.prototype == "object" && ' + p + ".constructor === Function ? " + p + " : function() {})";
         }
     }
     s += " {\n";
     var declared = [];
-    for (var i = rng(6); --i >= 0;) {
+    for (var i = get_num(5); --i >= 0;) {
         var fixed = false;
         if (rng(5) == 0) {
             fixed = true;
@@ -1824,15 +1836,31 @@ function createClassLiteral(recurmax, stmtDepth, canThrow, name) {
             declared.push(internal);
         }
         if (SUPPORT.class_field && rng(2)) {
-            s += internal || createObjectKey(recurmax, stmtDepth, canThrow);
+            if (internal) {
+                s += internal;
+            } else if (fixed && bug_class_static_nontrivial) {
+                s += getDotKey();
+            } else {
+                s += createObjectKey(recurmax, stmtDepth, canThrow);
+            }
             if (rng(5)) {
-                async = bug_async_class_await && fixed && 0;
+                async = false;
                 generator = false;
                 s += " = " + createExpression(recurmax, NO_COMMA, stmtDepth, fixed ? canThrow : CANNOT_THROW);
                 generator = save_generator;
                 async = save_async;
             }
             s += ";\n";
+        } else if (SUPPORT.class_static_init && fixed && !internal && rng(10) == 0) {
+            async = false;
+            generator = false;
+            s += [
+                "{ ",
+                createStatements(5, recurmax, canThrow, CANNOT_BREAK, CANNOT_CONTINUE, CANNOT_RETURN, stmtDepth),
+                " }\n",
+            ].join("");
+            generator = save_generator;
+            async = save_async;
         } else {
             if (!fixed && !internal && constructor && rng(10) == 0) {
                 internal = constructor;
@@ -1988,7 +2016,7 @@ function createBinaryOp(noComma, canThrow) {
     var op;
     do {
         op = BINARY_OPS[rng(BINARY_OPS.length)];
-    } while (noComma && op == "," || !canThrow && op == " in ");
+    } while (noComma && op == "," || !canThrow && /^ in/.test(op));
     return op;
 }
 
@@ -2031,7 +2059,7 @@ function isBannedKeyword(name) {
       case "let":
         return in_class;
       case "await":
-        return async !== false;
+        return async || in_class && bug_class_static_await;
       case "yield":
         return generator || in_class;
     }
@@ -2074,13 +2102,23 @@ function createVarName(maybe, dontStore) {
 }
 
 if (require.main !== module) {
-    exports.createTopLevelCode = createTopLevelCode;
+    exports.createTopLevelCode = function() {
+        var code = createTopLevelCode();
+        exports.module = async && has_await;
+        return code;
+    };
     exports.num_iterations = num_iterations;
     exports.verbose = verbose;
     return;
 }
 
 function run_code(code, toplevel, timeout) {
+    if (async && has_await) code = [
+        '"use strict";',
+        "(async()=>{",
+        code,
+        '})().catch(e=>process.on("exit",()=>{throw e}));',
+    ].join("\n");
     return sandbox.run_code(sandbox.patch_module_statements(code), toplevel, timeout);
 }
 
@@ -2100,7 +2138,9 @@ function errorln(msg) {
 }
 
 function try_beautify(code, toplevel, result, printfn, options) {
-    var beautified = UglifyJS.minify(code, JSON.parse(beautify_options));
+    var o = JSON.parse(beautify_options);
+    if (async && has_await) o.module = true;
+    var beautified = UglifyJS.minify(code, o);
     if (beautified.error) {
         printfn("// !!! beautify failed !!!");
         printfn(beautified.error);
@@ -2110,7 +2150,7 @@ function try_beautify(code, toplevel, result, printfn, options) {
     } else if (options) {
         var uglified = UglifyJS.minify(beautified.code, JSON.parse(options));
         var expected, actual;
-        if (typeof uglify_code != "string" || uglified.error) {
+        if (sandbox.is_error(uglify_code) || uglified.error) {
             expected = uglify_code;
             actual = uglified.error;
         } else {
@@ -2139,7 +2179,7 @@ function log_suspects(minify_options, component) {
     var defs = default_options[component];
     var toplevel = sandbox.has_toplevel(minify_options);
     var suspects = Object.keys(defs).filter(function(name) {
-        var flip = name == "keep_fargs";
+        var flip = component == "compress" && name == "keep_fargs";
         if (flip !== (name in options ? options : defs)[name]) {
             var m = JSON.parse(JSON.stringify(minify_options));
             var o = JSON.parse(JSON.stringify(options));
@@ -2147,7 +2187,7 @@ function log_suspects(minify_options, component) {
             m[component] = o;
             m.validate = true;
             var result = UglifyJS.minify(original_code, m);
-            if (typeof uglify_code != "string") {
+            if (sandbox.is_error(uglify_code)) {
                 return !sandbox.same_stdout(uglify_code, result.error);
             } else if (result.error) {
                 errorln("Error testing options." + component + "." + name);
@@ -2175,7 +2215,7 @@ function log_suspects_global(options, toplevel) {
         m[component] = false;
         m.validate = true;
         var result = UglifyJS.minify(original_code, m);
-        if (typeof uglify_code != "string") {
+        if (sandbox.is_error(uglify_code)) {
             return !sandbox.same_stdout(uglify_code, result.error);
         } else if (result.error) {
             errorln("Error testing options." + component);
@@ -2204,7 +2244,16 @@ function log(options) {
     errorln();
     errorln();
     errorln("//-------------------------------------------------------------");
-    if (typeof uglify_code == "string") {
+    if (sandbox.is_error(uglify_code)) {
+        errorln("// !!! uglify failed !!!");
+        errorln(uglify_code);
+        if (original_erred) {
+            errorln();
+            errorln();
+            errorln("original stacktrace:");
+            errorln(original_result);
+        }
+    } else {
         errorln("// uglified code");
         try_beautify(uglify_code, toplevel, uglify_result, errorln);
         errorln();
@@ -2213,15 +2262,6 @@ function log(options) {
         errorln(original_result);
         errorln("uglified result:");
         errorln(uglify_result);
-    } else {
-        errorln("// !!! uglify failed !!!");
-        errorln(uglify_code);
-        if (errored) {
-            errorln();
-            errorln();
-            errorln("original stacktrace:");
-            errorln(original_result);
-        }
     }
     errorln("//-------------------------------------------------------------");
     if (!ok) {
@@ -2253,12 +2293,27 @@ function log(options) {
 }
 
 function sort_globals(code) {
-    var globals = run_code("throw Object.keys(this).sort(" + function(global) {
+    var injected = "throw Object.keys(this).sort(" + function(global) {
         return function(m, n) {
             return (typeof global[n] == "function") - (typeof global[m] == "function")
                 || (m < n ? -1 : m > n ? 1 : 0);
         };
-    } + "(this));\n" + code);
+    } + "(this));";
+    var save_async = async;
+    if (async && has_await) {
+        async = false;
+        injected = [
+            '"use strict";',
+            injected,
+            "(async function(){",
+            code,
+            "})();"
+        ].join("\n");
+    } else {
+        injected += "\n" + code;
+    }
+    var globals = run_code(injected);
+    async = save_async;
     if (!Array.isArray(globals)) {
         errorln();
         errorln();
@@ -2290,7 +2345,7 @@ function fuzzy_match(original, uglified) {
     return true;
 
     function collect(input, nums) {
-        return input.replace(/-?([1-9][0-9]*(\.[0-9]+)?|0\.[0-9]+)(e-?[1-9][0-9]*)?/ig, function(num) {
+        return input.replace(/-?([1-9][0-9]*(\.[0-9]+)?|0\.[0-9]+)(e-?[1-9][0-9]*)?/gi, function(num) {
             return "<|" + nums.push(+num) + "|>";
         });
     }
@@ -2318,12 +2373,20 @@ function is_error_in(ex) {
     return ex.name == "TypeError" && /'in'/.test(ex.message);
 }
 
+function is_error_tdz(ex) {
+    return ex.name == "ReferenceError";
+}
+
 function is_error_spread(ex) {
-    return ex.name == "TypeError" && /Found non-callable @@iterator| is not iterable| not a function/.test(ex.message);
+    return ex.name == "TypeError" && /Found non-callable @@iterator| is not iterable| not a function|Symbol\(Symbol\.iterator\)/.test(ex.message);
 }
 
 function is_error_recursion(ex) {
     return ex.name == "RangeError" && /Invalid string length|Maximum call stack size exceeded/.test(ex.message);
+}
+
+function is_error_set_property(ex) {
+    return ex.name == "TypeError" && /^Cannot set propert[\s\S]+? of (null|undefined)/.test(ex.message);
 }
 
 function is_error_redeclaration(ex) {
@@ -2331,7 +2394,7 @@ function is_error_redeclaration(ex) {
 }
 
 function is_error_destructuring(ex) {
-    return ex.name == "TypeError" && /^Cannot destructure /.test(ex.message);
+    return ex.name == "TypeError" && /^Cannot (destructure|read propert)/.test(ex.message);
 }
 
 function is_error_class_constructor(ex) {
@@ -2345,6 +2408,8 @@ function is_error_getter_only_property(ex) {
 }
 
 function patch_try_catch(orig, toplevel) {
+    var patched = Object.create(null);
+    var patches = [];
     var stack = [ {
         code: orig,
         index: 0,
@@ -2382,7 +2447,7 @@ function patch_try_catch(orig, toplevel) {
                     "throw " + match[1] + ";",
                 ].join("\n");
             }
-            var new_code = code.slice(0, index) + insert + code.slice(index) + tail_throw;
+            var new_code = code.slice(0, index) + insert + code.slice(index) + tail_throw + "var UFUZZ_ERROR;";
             var result = run_code(new_code, toplevel);
             if (!sandbox.is_error(result)) {
                 if (!stack.filled && match[1]) stack.push({
@@ -2394,26 +2459,34 @@ function patch_try_catch(orig, toplevel) {
                 offset += insert.length;
                 code = new_code;
             } else if (is_error_in(result)) {
-                index = result.ufuzz_catch;
-                return orig.slice(0, index) + result.ufuzz_var + ' = new Error("invalid `in`");' + orig.slice(index);
+                patch(result.ufuzz_catch, result.ufuzz_var + ' = new Error("invalid `in`");');
+            } else if (is_error_tdz(result)) {
+                patch(result.ufuzz_catch, result.ufuzz_var + ' = new Error("TDZ");');
             } else if (is_error_spread(result)) {
-                index = result.ufuzz_catch;
-                return orig.slice(0, index) + result.ufuzz_var + ' = new Error("spread not iterable");' + orig.slice(index);
+                patch(result.ufuzz_catch, result.ufuzz_var + ' = new Error("spread not iterable");');
             } else if (is_error_recursion(result)) {
-                index = result.ufuzz_try;
-                return orig.slice(0, index) + 'throw new Error("skipping infinite recursion");' + orig.slice(index);
+                patch(result.ufuzz_try, 'throw new Error("skipping infinite recursion");');
+            } else if (is_error_set_property(result)) {
+                patch(result.ufuzz_catch, result.ufuzz_var + ' = new Error("cannot set property");');
             } else if (is_error_destructuring(result)) {
-                index = result.ufuzz_catch;
-                return orig.slice(0, index) + result.ufuzz_var + ' = new Error("cannot destructure");' + orig.slice(index);
+                patch(result.ufuzz_catch, result.ufuzz_var + ' = new Error("cannot destructure");');
             } else if (is_error_class_constructor(result)) {
-                index = result.ufuzz_catch;
-                return orig.slice(0, index) + result.ufuzz_var + ' = new Error("missing new for class");' + orig.slice(index);
+                patch(result.ufuzz_catch, result.ufuzz_var + ' = new Error("missing new for class");');
             } else if (is_error_getter_only_property(result)) {
-                index = result.ufuzz_catch;
-                return orig.slice(0, index) + result.ufuzz_var + ' = new Error("setting getter-only property");' + orig.slice(index);
+                patch(result.ufuzz_catch, result.ufuzz_var + ' = new Error("setting getter-only property");');
             }
         }
         stack.filled = true;
+    }
+    if (patches.length) return patches.reduce(function(code, patch) {
+        var index = patch[0];
+        return code.slice(0, index) + patch[1] + code.slice(index);
+    }, orig);
+
+    function patch(index, code) {
+        if (patched[index]) return;
+        patched[index] = true;
+        patches.unshift([ index, code ]);
     }
 }
 
@@ -2426,22 +2499,26 @@ var beautify_options = {
     },
 };
 var minify_options = require("./options.json");
-if (typeof sandbox.run_code("A:if (0) B:; else B:;") != "string") {
+if (sandbox.is_error(sandbox.run_code("A:if (0) B:; else B:;"))) {
     minify_options.forEach(function(o) {
         if (!("mangle" in o)) o.mangle = {};
         if (o.mangle) o.mangle.v8 = true;
     });
 }
 var bug_async_arrow_rest = function() {};
-if (SUPPORT.arrow && SUPPORT.async && SUPPORT.rest && typeof sandbox.run_code("async (a = f(...[], b)) => 0;") != "string") {
+if (SUPPORT.arrow && SUPPORT.async && SUPPORT.rest && sandbox.is_error(sandbox.run_code("async (a = f(...[], b)) => 0;"))) {
     bug_async_arrow_rest = function(ex) {
         return ex.name == "SyntaxError" && ex.message == "Rest parameter must be last formal parameter";
     };
 }
-var bug_async_class_await = SUPPORT.async && SUPPORT.class_field && typeof sandbox.run_code("var await; async function f() { class A { static p = await; } }") != "string";
-var bug_for_of_async = SUPPORT.for_await_of && typeof sandbox.run_code("var async; for (async of []);") != "string";
-var bug_for_of_var = SUPPORT.for_of && SUPPORT.let && typeof sandbox.run_code("try {} catch (e) { for (var e of []); }") != "string";
-if (SUPPORT.destructuring && typeof sandbox.run_code("console.log([ 1 ], {} = 2);") != "string") {
+var bug_class_static_await = SUPPORT.async && SUPPORT.class_field && sandbox.is_error(sandbox.run_code("var await; class A { static p = await; }"));
+var bug_class_static_nontrivial = SUPPORT.class_field && sandbox.is_error(sandbox.run_code("class A { static 42; static get 42() {} }"));
+var bug_for_of_async = SUPPORT.for_await_of && sandbox.is_error(sandbox.run_code("var async; for (async of []);"));
+var bug_for_of_var = SUPPORT.for_of && SUPPORT.let && sandbox.is_error(sandbox.run_code("try {} catch (e) { for (var e of []); }"));
+var bug_proto_stream = function(ex) {
+    return ex.name == "TypeError" && ex.message == "callback is not a function";
+}
+if (SUPPORT.destructuring && sandbox.is_error(sandbox.run_code("console.log([ 1 ], {} = 2);"))) {
     beautify_options.output.v8 = true;
     minify_options.forEach(function(o) {
         if (!("output" in o)) o.output = {};
@@ -2450,7 +2527,7 @@ if (SUPPORT.destructuring && typeof sandbox.run_code("console.log([ 1 ], {} = 2)
 }
 beautify_options = JSON.stringify(beautify_options);
 minify_options = minify_options.map(JSON.stringify);
-var original_code, original_result, errored;
+var original_code, original_result, original_erred;
 var uglify_code, uglify_result, ok;
 for (var round = 1; round <= num_iterations; round++) {
     process.stdout.write(round + " of " + num_iterations + "\r");
@@ -2458,7 +2535,7 @@ for (var round = 1; round <= num_iterations; round++) {
     original_code = createTopLevelCode();
     var orig_result = [ run_code(original_code), run_code(original_code, true) ];
     if (orig_result.some(function(result, toplevel) {
-        if (typeof result == "string") return;
+        if (!sandbox.is_error(result)) return;
         println();
         println();
         println("//=============================================================");
@@ -2469,42 +2546,63 @@ for (var round = 1; round <= num_iterations; round++) {
         println("original result:");
         println(result);
         println();
-        // ignore v8 parser bug
-        return bug_async_arrow_rest(result);
+            // ignore v8 parser bug
+        return bug_async_arrow_rest(result)
+            // ignore Node.js `__proto__` quirks
+            || bug_proto_stream(result)
+            // ignore runtime platform bugs
+            || result.message == "Script execution aborted.";
     })) continue;
     minify_options.forEach(function(options) {
         var o = JSON.parse(options);
+        if (async && has_await) {
+            o.module = true;
+            options = JSON.stringify(o);
+        }
         var toplevel = sandbox.has_toplevel(o);
         o.validate = true;
         uglify_code = UglifyJS.minify(original_code, o);
         original_result = orig_result[toplevel ? 1 : 0];
-        errored = typeof original_result != "string";
+        original_erred = sandbox.is_error(original_result);
         if (!uglify_code.error) {
             uglify_code = uglify_code.code;
             uglify_result = run_code(uglify_code, toplevel);
             ok = sandbox.same_stdout(original_result, uglify_result);
+            var uglify_erred = sandbox.is_error(uglify_result);
             // ignore v8 parser bug
-            if (!ok && bug_async_arrow_rest(uglify_result)) ok = true;
+            if (!ok && uglify_erred && bug_async_arrow_rest(uglify_result)) ok = true;
+            // ignore Node.js `__proto__` quirks
+            if (!ok && uglify_erred && bug_proto_stream(uglify_result)) ok = true;
+            // ignore runtime platform bugs
+            if (!ok && uglify_erred && uglify_result.message == "Script execution aborted.") ok = true;
             // handle difference caused by time-outs
-            if (!ok && errored && is_error_timeout(original_result)) {
-                if (is_error_timeout(uglify_result)) {
-                    // ignore difference in error message
-                    ok = true;
-                } else {
+            if (!ok) {
+                if (original_erred && is_error_timeout(original_result)) {
+                    if (uglify_erred && is_error_timeout(uglify_result)) {
+                        // ignore difference in error message
+                        ok = true;
+                    } else {
+                        // ignore spurious time-outs
+                        if (!orig_result[toplevel ? 3 : 2]) orig_result[toplevel ? 3 : 2] = run_code(original_code, toplevel, 10000);
+                        ok = sandbox.same_stdout(orig_result[toplevel ? 3 : 2], uglify_result);
+                    }
+                } else if (uglify_erred && is_error_timeout(uglify_result)) {
                     // ignore spurious time-outs
-                    if (!orig_result[toplevel ? 3 : 2]) orig_result[toplevel ? 3 : 2] = run_code(original_code, toplevel, 10000);
-                    ok = sandbox.same_stdout(orig_result[toplevel ? 3 : 2], uglify_result);
+                    var waited_result = run_code(uglify_code, toplevel, 10000);
+                    ok = sandbox.same_stdout(original_result, waited_result);
                 }
             }
             // ignore declaration order of global variables
             if (!ok && !toplevel) {
-                ok = sandbox.same_stdout(run_code(sort_globals(original_code)), run_code(sort_globals(uglify_code)));
+                if (!(original_erred && original_result.name == "SyntaxError") && !(uglify_erred && uglify_result.name == "SyntaxError")) {
+                    ok = sandbox.same_stdout(run_code(sort_globals(original_code)), run_code(sort_globals(uglify_code)));
+                }
             }
             // ignore numerical imprecision caused by `unsafe_math`
-            if (!ok && o.compress && o.compress.unsafe_math && typeof original_result == typeof uglify_result) {
-                if (typeof original_result == "string") {
+            if (!ok && o.compress && o.compress.unsafe_math) {
+                if (typeof original_result == "string" && typeof uglify_result == "string") {
                     ok = fuzzy_match(original_result, uglify_result);
-                } else if (sandbox.is_error(original_result)) {
+                } else if (original_erred && uglify_erred) {
                     ok = original_result.name == uglify_result.name && fuzzy_match(original_result.message, uglify_result.message);
                 }
                 if (!ok) {
@@ -2512,47 +2610,33 @@ for (var round = 1; round <= num_iterations; round++) {
                     ok = sandbox.same_stdout(fuzzy_result, uglify_result);
                 }
             }
-            // ignore difference in error message caused by Temporal Dead Zone
-            if (!ok && errored && uglify_result.name == "ReferenceError" && original_result.name == "ReferenceError") ok = true;
-            // ignore difference due to implicit strict-mode in `class`
-            if (!ok && /\bclass\b/.test(original_code)) {
-                var original_strict = run_code('"use strict";\n' + original_code, toplevel);
-                var uglify_strict = run_code('"use strict";\n' + uglify_code, toplevel);
-                if (typeof original_strict != "string") {
-                    ok = typeof uglify_strict != "string";
-                } else {
-                    ok = sandbox.same_stdout(original_strict, uglify_strict);
-                }
-            }
-            // ignore difference in error message caused by `import` symbol redeclaration
-            if (!ok && errored && /\bimport\b/.test(original_code)) {
-                if (is_error_redeclaration(uglify_result) && is_error_redeclaration(original_result)) ok = true;
-            }
+            if (!ok && original_erred && uglify_erred && (
+                // ignore difference in error message caused by `in`
+                is_error_in(original_result) && is_error_in(uglify_result)
+                // ignore difference in error message caused by Temporal Dead Zone
+                || is_error_tdz(original_result) && is_error_tdz(uglify_result)
+                // ignore difference in error message caused by spread syntax
+                || is_error_spread(original_result) && is_error_spread(uglify_result)
+                // ignore difference in error message caused by destructuring assignment
+                || is_error_set_property(original_result) && is_error_set_property(uglify_result)
+                // ignore difference in error message caused by `import` symbol redeclaration
+                || /\bimport\b/.test(original_code) && is_error_redeclaration(original_result) && is_error_redeclaration(uglify_result)
+                // ignore difference in error message caused by destructuring
+                || is_error_destructuring(original_result) && is_error_destructuring(uglify_result)
+                // ignore difference in error message caused by call on class
+                || is_error_class_constructor(original_result) && is_error_class_constructor(uglify_result)
+                // ignore difference in error message caused by setting getter-only property
+                || is_error_getter_only_property(original_result) && is_error_getter_only_property(uglify_result)
+            )) ok = true;
             // ignore difference due to `__proto__` assignment
             if (!ok && /\b__proto__\b/.test(original_code)) {
                 var original_proto = run_code("(" + patch_proto + ")();\n" + original_code, toplevel);
                 var uglify_proto = run_code("(" + patch_proto + ")();\n" + uglify_code, toplevel);
                 ok = sandbox.same_stdout(original_proto, uglify_proto);
             }
-            // ignore difference in error message caused by `in`
-            if (!ok && errored && is_error_in(uglify_result) && is_error_in(original_result)) ok = true;
-            // ignore difference in error message caused by spread syntax
-            if (!ok && errored && is_error_spread(uglify_result) && is_error_spread(original_result)) ok = true;
             // ignore difference in depth of termination caused by infinite recursion
-            if (!ok && errored && is_error_recursion(original_result)) {
-                if (is_error_recursion(uglify_result) || typeof uglify_result == "string") ok = true;
-            }
-            // ignore difference in error message caused by destructuring
-            if (!ok && errored && is_error_destructuring(uglify_result) && is_error_destructuring(original_result)) {
-                ok = true;
-            }
-            // ignore difference in error message caused by call on class
-            if (!ok && errored && is_error_class_constructor(uglify_result) && is_error_class_constructor(original_result)) {
-                ok = true;
-            }
-            // ignore difference in error message caused by setting getter-only property
-            if (!ok && errored && is_error_getter_only_property(uglify_result) && is_error_getter_only_property(original_result)) {
-                ok = true;
+            if (!ok && original_erred && is_error_recursion(original_result)) {
+                if (!uglify_erred || is_error_recursion(uglify_result)) ok = true;
             }
             // ignore errors above when caught by try-catch
             if (!ok) {
@@ -2564,7 +2648,7 @@ for (var round = 1; round <= num_iterations; round++) {
             }
         } else {
             uglify_code = uglify_code.error;
-            ok = errored && uglify_code.name == original_result.name;
+            ok = original_erred && uglify_code.name == original_result.name;
         }
         if (verbose || (verbose_interval && !(round % INTERVAL_COUNT)) || !ok) log(options);
         if (!ok && isFinite(num_iterations)) {
