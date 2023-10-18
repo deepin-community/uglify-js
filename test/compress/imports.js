@@ -40,6 +40,17 @@ default_keys: {
     expect_exact: 'import foo,{bar}from"baz";'
 }
 
+non_identifiers: {
+    beautify = {
+        quote_style: 3,
+    }
+    input: {
+        import { '42' as foo } from "bar";
+        import { "foo" as bar } from 'baz';
+    }
+    expect_exact: "import{'42'as foo}from\"bar\";import{foo as bar}from'baz';"
+}
+
 dynamic: {
     input: {
         (async a => await import(a))("foo").then(bar);
@@ -106,6 +117,22 @@ drop_unused: {
     }
 }
 
+drop_side_effect_free: {
+    options = {
+        imports: true,
+        side_effects: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        import foo from "bar";
+        var a = foo;
+    }
+    expect: {
+        import "bar";
+    }
+}
+
 mangle: {
     rename = false
     mangle = {
@@ -113,12 +140,12 @@ mangle: {
     }
     input: {
         import foo, { bar } from "baz";
-        consoe.log(moo);
+        console.log(moo);
         import * as moo from "moz";
     }
     expect: {
         import o, { bar as m } from "baz";
-        consoe.log(r);
+        console.log(r);
         import * as r from "moz";
     }
 }
@@ -130,12 +157,12 @@ rename_mangle: {
     }
     input: {
         import foo, { bar } from "baz";
-        consoe.log(moo);
+        console.log(moo);
         import * as moo from "moz";
     }
     expect: {
         import o, { bar as m } from "baz";
-        consoe.log(r);
+        console.log(r);
         import * as r from "moz";
     }
 }
@@ -209,5 +236,35 @@ issue_4708_2: {
         var a;
         console.log(a);
         import a from "foo";
+    }
+}
+
+pr_5550_1: {
+    input: {
+        if (console)
+            import("foo");
+        else
+            import.meta.url.replace(/bar/g, console.log);
+    }
+    expect: {
+        if (console)
+            import("foo");
+        else
+            import.meta.url.replace(/bar/g, console.log);
+    }
+}
+
+pr_5550_2: {
+    input: {
+        L: {
+            import("foo");
+            import.meta.url.replace(/bar/g, console.log);
+        }
+    }
+    expect: {
+        L: {
+            import("foo");
+            import.meta.url.replace(/bar/g, console.log);
+        }
     }
 }

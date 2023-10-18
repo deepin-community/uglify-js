@@ -1289,6 +1289,7 @@ issue_2878: {
         collapse_vars: true,
         pure_getters: true,
         sequences: true,
+        side_effects: true,
     }
     input: {
         var c = 0;
@@ -1363,9 +1364,8 @@ issue_3490_1: {
     }
     expect: {
         var b = 42, c = "FAIL";
-        if (function() {
-            var a;
-        }(), c = "PASS", b) while ("" == typeof d);
+        var a;
+        if (c = "PASS", b) while ("" == typeof d);
         console.log(c, b);
     }
     expect_stdout: "PASS 42"
@@ -1540,10 +1540,12 @@ this_toString: {
 issue_4803: {
     options = {
         hoist_vars: true,
+        join_vars: true,
         pure_getters: "strict",
         reduce_vars: true,
         side_effects: true,
         toplevel: true,
+        unused: true,
     }
     input: {
         var o = {
@@ -1636,6 +1638,26 @@ nested_property_assignments_3: {
                 (a = a.p).q = a;
         })(o);
         console.log(o.p.q === o.p ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+}
+
+nested_property_assignments_4: {
+    options = {
+        pure_getters: true,
+        side_effects: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var n, o = { p: { q: { r: "PASS" } } };
+        (n = o.p).r = n.q.r;
+        console.log(o.p.r);
+    }
+    expect: {
+        var n, o = { p: { q: { r: "PASS" } } };
+        (n = o.p).r = n.q.r;
+        console.log(o.p.r);
     }
     expect_stdout: "PASS"
 }

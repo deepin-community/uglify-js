@@ -1,3 +1,146 @@
+uglify-js (3.17.4-2) unstable; urgency=medium
+
+  [ Debian Janitor ]
+  * apply multi-arch hints: add Multi-Arch: foreign
+
+ -- Jonas Smedegaard <dr@jones.dk>  Fri, 02 Dec 2022 20:13:41 +0100
+
+uglify-js (3.17.4-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+ -- Jonas Smedegaard <dr@jones.dk>  Fri, 02 Dec 2022 20:03:16 +0100
+
+uglify-js (3.17.3-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+ -- Jonas Smedegaard <dr@jones.dk>  Tue, 18 Oct 2022 20:00:30 +0200
+
+uglify-js (3.17.2-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+ -- Jonas Smedegaard <dr@jones.dk>  Tue, 27 Sep 2022 16:27:05 +0200
+
+uglify-js (3.17.1-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+ -- Jonas Smedegaard <dr@jones.dk>  Sun, 25 Sep 2022 09:41:45 +0200
+
+uglify-js (3.17.0-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+  [ Jonas Smedegaard ]
+  * update copyright info:
+    + update coverage
+    + drop superfluous alternate Source URI
+  * update lintian overrides
+
+ -- Jonas Smedegaard <dr@jones.dk>  Wed, 24 Aug 2022 19:52:21 +0200
+
+uglify-js (3.16.3-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release(s)
+
+ -- Jonas Smedegaard <dr@jones.dk>  Fri, 29 Jul 2022 19:58:30 +0200
+
+uglify-js (3.16.1-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+ -- Jonas Smedegaard <dr@jones.dk>  Sun, 19 Jun 2022 15:17:41 +0200
+
+uglify-js (3.16.0-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+  [ Jonas Smedegaard ]
+  * update git-buildpackage config:
+    + use DEP-14 git branches
+    + enable automatic DEP-14 branch name handling
+    + add usage config
+  * declare compliance with Debian Policy 4.6.1
+
+ -- Jonas Smedegaard <dr@jones.dk>  Mon, 06 Jun 2022 10:53:11 +0200
+
+uglify-js (3.15.4-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+ -- Jonas Smedegaard <dr@jones.dk>  Sat, 16 Apr 2022 10:51:46 +0200
+
+uglify-js (3.15.3-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+ -- Jonas Smedegaard <dr@jones.dk>  Sun, 13 Mar 2022 09:28:33 +0100
+
+uglify-js (3.15.2-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+ -- Jonas Smedegaard <dr@jones.dk>  Mon, 28 Feb 2022 10:35:44 +0100
+
+uglify-js (3.15.1-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+  [ Jonas Smedegaard ]
+  * update generating documentation;
+    build-depend on cmark-gfm (not pandoc)
+
+ -- Jonas Smedegaard <dr@jones.dk>  Fri, 11 Feb 2022 11:50:32 +0100
+
+uglify-js (3.15.0-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+ -- Jonas Smedegaard <dr@jones.dk>  Tue, 01 Feb 2022 11:38:59 +0100
+
+uglify-js (3.14.5-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+  [ Jonas Smedegaard ]
+  * minor improvement to long description of node-uglify-js
+  * tighten lintian overrides
+
+ -- Jonas Smedegaard <dr@jones.dk>  Wed, 15 Dec 2021 12:06:23 +0100
+
+uglify-js (3.14.4-2) unstable; urgency=medium
+
+  * Team upload
+  * Fix autopkgtest
+
+ -- Yadd <yadd@debian.org>  Thu, 09 Dec 2021 09:22:21 +0100
+
+uglify-js (3.14.4-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+  [ Jonas Smedegaard ]
+  * update lintian overrides
+
+ -- Jonas Smedegaard <dr@jones.dk>  Fri, 03 Dec 2021 13:01:20 +0100
+
 uglify-js (3.14.3-1) unstable; urgency=medium
 
   [ upstream ]

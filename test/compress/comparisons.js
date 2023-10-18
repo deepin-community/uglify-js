@@ -40,6 +40,22 @@ unsafe_comps: {
     }
 }
 
+unsafe_in_instanceof: {
+    options = {
+        side_effects: true,
+        unsafe_comps: true,
+    }
+    input: {
+        var a;
+        42 in a;
+        f() instanceof "foo";
+    }
+    expect: {
+        var a;
+        f();
+    }
+}
+
 dont_change_in_or_instanceof_expressions: {
     input: {
         1 in 1;
@@ -259,6 +275,7 @@ issue_2857_3: {
 issue_2857_4: {
     options = {
         comparisons: true,
+        conditionals: true,
     }
     input: {
         function f(a, p) {
@@ -289,6 +306,7 @@ issue_2857_4: {
 issue_2857_5: {
     options = {
         comparisons: true,
+        conditionals: true,
     }
     input: {
         function f(a, p) {
@@ -489,7 +507,37 @@ issue_3413: {
     }
     expect: {
         var b;
-        void 0 !== ("" < b || void 0) || console.log("PASS");
+        void 0 === ("" < b || void 0) && console.log("PASS");
     }
     expect_stdout: "PASS"
+}
+
+nullish_assign: {
+    options = {
+        comparisons: true,
+    }
+    input: {
+        var a;
+        void 0 !== (a = "PASS".split("")) && null !== a && console.log(a.join("-"));
+    }
+    expect: {
+        var a;
+        null != (a = "PASS".split("")) && console.log(a.join("-"));
+    }
+    expect_stdout: "P-A-S-S"
+}
+
+nullish_chain: {
+    options = {
+        comparisons: true,
+        conditionals: true,
+    }
+    input: {
+        var a;
+        A || B || void 0 === a || null === a || C;
+    }
+    expect: {
+        var a;
+        A || B || null == a || C;
+    }
 }

@@ -241,6 +241,296 @@ class_super: {
     node_version: ">=4"
 }
 
+static_newline_1: {
+    input: {
+        class A {
+            static
+            P
+        }
+        console.log("P" in A, "static" in A);
+        console.log("P" in new A(), "static" in new A());
+    }
+    expect_exact: 'class A{static P}console.log("P"in A,"static"in A);console.log("P"in new A,"static"in new A);'
+    expect_stdout: [
+        "true false",
+        "false false",
+    ]
+    node_version: ">=12"
+}
+
+static_newline_2: {
+    input: {
+        class A {
+            static
+            static
+            P
+        }
+        console.log("P" in A, "static" in A);
+        console.log("P" in new A(), "static" in new A());
+    }
+    expect_exact: 'class A{static static;P}console.log("P"in A,"static"in A);console.log("P"in new A,"static"in new A);'
+    expect_stdout: [
+        "false true",
+        "true false",
+    ]
+    node_version: ">=12"
+}
+
+static_newline_3: {
+    input: {
+        class A {
+            static
+            static
+            static
+            P
+        }
+        console.log("P" in A, "static" in A);
+        console.log("P" in new A(), "static" in new A());
+    }
+    expect_exact: 'class A{static static;static P}console.log("P"in A,"static"in A);console.log("P"in new A,"static"in new A);'
+    expect_stdout: [
+        "true true",
+        "false false",
+    ]
+    node_version: ">=12"
+}
+
+static_newline_4: {
+    input: {
+        class A {
+            static
+            static
+            static
+            static
+            P
+        }
+        console.log("P" in A, "static" in A);
+        console.log("P" in new A(), "static" in new A());
+    }
+    expect_exact: 'class A{static static;static static;P}console.log("P"in A,"static"in A);console.log("P"in new A,"static"in new A);'
+    expect_stdout: [
+        "false true",
+        "true false",
+    ]
+    node_version: ">=12"
+}
+
+static_newline_init: {
+    input: {
+        class A {
+            static
+            {
+                console.log("PASS");
+            }
+        }
+    }
+    expect_exact: 'class A{static{console.log("PASS")}}'
+    expect_stdout: "PASS"
+    node_version: ">=16"
+}
+
+static_init: {
+    input: {
+        var a = "foo";
+        var b = null;
+        class A {
+            static {
+                var a = "bar";
+                b = true;
+                var c = 42;
+                console.log(a, b, c);
+            }
+        }
+        console.log(a, b, typeof c);
+    }
+    expect_exact: 'var a="foo";var b=null;class A{static{var a="bar";b=true;var c=42;console.log(a,b,c)}}console.log(a,b,typeof c);'
+    expect_stdout: [
+        "bar true 42",
+        "foo true undefined",
+    ]
+    node_version: ">=16"
+}
+
+static_field_init: {
+    options = {
+        side_effects: true,
+    }
+    input: {
+        (class {
+            static [console.log("foo")] = console.log("bar");
+            static {
+                console.log("baz");
+            }
+            static [console.log("moo")] = console.log("moz");
+        });
+    }
+    expect: {
+        (class {
+            static [(console.log("foo"), console.log("moo"))] = (
+                console.log("bar"),
+                (() => {
+                    console.log("baz");
+                })(),
+                console.log("moz")
+            );
+        });
+    }
+    expect_stdout: [
+        "foo",
+        "moo",
+        "bar",
+        "baz",
+        "moz",
+    ]
+    node_version: ">=16"
+}
+
+static_field_init_strict: {
+    options = {
+        side_effects: true,
+    }
+    input: {
+        "use strict";
+        (class {
+            static [console.log("foo")] = console.log("bar");
+            static {
+                console.log("baz");
+            }
+            static [console.log("moo")] = console.log("moz");
+        });
+    }
+    expect: {
+        "use strict";
+        console.log("foo"),
+        console.log("moo"),
+        (() => (
+            console.log("bar"),
+            (() => {
+                console.log("baz");
+            })(),
+            console.log("moz")
+        ))();
+    }
+    expect_stdout: [
+        "foo",
+        "moo",
+        "bar",
+        "baz",
+        "moz",
+    ]
+    node_version: ">=16"
+}
+
+static_init_side_effects_1: {
+    options = {
+        merge_vars: true,
+        side_effects: true,
+    }
+    input: {
+        var a = "FAIL";
+        (class {
+            static {
+                a = "PASS";
+            }
+        });
+        console.log(a);
+    }
+    expect: {
+        var a = "FAIL";
+        (class {
+            static {
+                a = "PASS";
+            }
+        });
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=16"
+}
+
+static_init_side_effects_1_strict: {
+    options = {
+        merge_vars: true,
+        side_effects: true,
+    }
+    input: {
+        "use strict";
+        var a = "FAIL";
+        (class {
+            static {
+                a = "PASS";
+            }
+        });
+        console.log(a);
+    }
+    expect: {
+        "use strict";
+        var a = "FAIL";
+        (() => (() => {
+            a = "PASS";
+        })())();
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=16"
+}
+
+static_init_side_effects_2: {
+    options = {
+        hoist_props: true,
+        reduce_vars: true,
+        side_effects: true,
+    }
+    input: {
+        var a = "FAIL";
+        (class {
+            static {
+                a = "PASS";
+            }
+        });
+        console.log(a);
+    }
+    expect: {
+        var a = "FAIL";
+        (class {
+            static {
+                a = "PASS";
+            }
+        });
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=16"
+}
+
+static_init_side_effects_2_strict: {
+    options = {
+        hoist_props: true,
+        reduce_vars: true,
+        side_effects: true,
+    }
+    input: {
+        "use strict";
+        var a = "FAIL";
+        (class {
+            static {
+                a = "PASS";
+            }
+        });
+        console.log(a);
+    }
+    expect: {
+        "use strict";
+        var a = "FAIL";
+        (() => (() => {
+            a = "PASS";
+        })())();
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=16"
+}
+
 block_scoped: {
     options = {
         evaluate: true,
@@ -309,6 +599,7 @@ drop_extends: {
         inline: true,
         passes: 2,
         pure_getters: "strict",
+        reduce_funcs: true,
         reduce_vars: true,
         sequences: true,
         side_effects: true,
@@ -341,7 +632,7 @@ drop_extends: {
     node_version: ">=4"
 }
 
-keep_extends: {
+keep_extends_1: {
     options = {
         toplevel: true,
         unused: true,
@@ -361,6 +652,43 @@ keep_extends: {
         } catch (e) {
             console.log("PASS");
         }
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+keep_extends_2: {
+    options = {
+        side_effects: true,
+    }
+    input: {
+        "use strict";
+        (class extends Function {});
+        console.log("PASS");
+    }
+    expect: {
+        "use strict";
+        (class extends Function {});
+        console.log("PASS");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+keep_extends_3: {
+    options = {
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        class A extends Function {}
+        console.log("PASS");
+    }
+    expect: {
+        "use strict";
+        (class extends Function {});
+        console.log("PASS");
     }
     expect_stdout: "PASS"
     node_version: ">=4"
@@ -419,6 +747,56 @@ separate_name: {
     node_version: ">=4"
 }
 
+static_getter: {
+    options = {
+        pure_getters: "strict",
+        side_effects: true,
+    }
+    input: {
+        "use strict";
+        (class {
+            static get p() {
+                console.log("PASS");
+            };
+        }).p;
+    }
+    expect: {
+        "use strict";
+        (class {
+            static get p() {
+                console.log("PASS");
+            };
+        }).p;
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+static_setter: {
+    options = {
+        pure_getters: "strict",
+        side_effects: true,
+    }
+    input: {
+        "use strict";
+        (class {
+            static set p(v) {
+                console.log(v);
+            };
+        }).p = "PASS";
+    }
+    expect: {
+        "use strict";
+        (class {
+            static set p(v) {
+                console.log(v);
+            };
+        }).p = "PASS";
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
 static_side_effects: {
     options = {
         inline: true,
@@ -434,6 +812,33 @@ static_side_effects: {
         console.log(a);
     }
     expect: {
+        var a = "FAIL 1";
+        (class {
+            static c = a = "PASS";
+        });
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+static_side_effects_strict: {
+    options = {
+        inline: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        var a = "FAIL 1";
+        class A {
+            static p = a = "PASS";
+            q = a = "FAIL 2";
+        }
+        console.log(a);
+    }
+    expect: {
+        "use strict";
         var a = "FAIL 1";
         a = "PASS";
         console.log(a);
@@ -517,6 +922,7 @@ single_use_3: {
 
 single_use_4: {
     options = {
+        reduce_funcs: true,
         reduce_vars: true,
         toplevel: true,
         unused: true,
@@ -643,6 +1049,58 @@ single_use_7: {
     node_version: ">=4"
 }
 
+single_use_extends: {
+    options = {
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        class A extends class B {
+            f() {
+                return "PASS";
+            }
+        } {}
+        console.log(new A().f());
+    }
+    expect: {
+        "use strict";
+        console.log(new class extends class {
+            f() {
+                return "PASS";
+            }
+        } {}().f());
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+single_use_extends_non_strict: {
+    options = {
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        class A extends class B {
+            f() {
+                return "PASS";
+            }
+        } {}
+        console.log(new A().f());
+    }
+    expect: {
+        console.log(new class extends class {
+            f() {
+                return "PASS";
+            }
+        } {}().f());
+    }
+    expect_stdout: "PASS"
+    node_version: ">=6"
+}
+
 collapse_non_strict: {
     options = {
         collapse_vars: true,
@@ -713,6 +1171,38 @@ collapse_rhs_static: {
     }
     expect_stdout: "PASS"
     node_version: ">=12"
+}
+
+inline_non_strict: {
+    options = {
+        reduce_funcs: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        function f(a) {
+            return a.p = "PASS";
+        }
+        class A {
+            g() {
+                return f(42);
+            }
+        }
+        console.log(new A().g());
+    }
+    expect: {
+        function f(a) {
+            return a.p = "PASS";
+        }
+        console.log(new class {
+            g() {
+                return f(42);
+            }
+        }().g());
+    }
+    expect_stdout: "PASS"
+    node_version: ">=6"
 }
 
 self_comparison: {
@@ -809,6 +1299,33 @@ unused_await: {
     expect: {
         var await = "PASS";
         (async function() {
+            (class {
+                static c = console.log(await);
+            });
+        })();
+    }
+    expect_stdout: true
+    node_version: ">=12 <16"
+}
+
+unused_await_strict: {
+    options = {
+        inline: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        var await = "PASS";
+        (async function() {
+            class A {
+                static p = console.log(await);
+            }
+        })();
+    }
+    expect: {
+        "use strict";
+        var await = "PASS";
+        (async function() {
             (() => console.log(await))();
         })();
     }
@@ -885,12 +1402,325 @@ keep_fnames: {
         class Foo {}
         console.log(Foo.name, class Bar {}.name);
     }
+    expect_stdout: "Foo Bar"
+    node_version: ">=4"
+}
+
+instanceof_lambda: {
+    options = {
+        evaluate: true,
+        side_effects: true,
+    }
+    input: {
+        "use strict";
+        console.log(42 instanceof class {});
+    }
+    expect: {
+        "use strict";
+        console.log(false);
+    }
+    expect_stdout: "false"
+    node_version: ">=4"
+}
+
+drop_instanceof: {
+    options = {
+        booleans: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        class A {}
+        console.log({} instanceof A, Math instanceof A);
+    }
+    expect: {
+        "use strict";
+        console.log(!1, (Math, !1));
+    }
+    expect_stdout: "false false"
+    node_version: ">=4"
+}
+
+keep_instanceof_1: {
+    options = {
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        class A {}
+        var A;
+        console.log({} instanceof A, Math instanceof A);
+    }
+    expect: {
+        "use strict";
+        class A {}
+        var A;
+        console.log({} instanceof A, Math instanceof A);
+    }
+    expect_stdout: SyntaxError("Identifier has already been declared")
+    node_version: ">=4"
+}
+
+keep_instanceof_2: {
+    options = {
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        var A = Object;
+        class A {}
+        console.log({} instanceof A, Math instanceof A);
+    }
+    expect: {
+        "use strict";
+        var A = Object;
+        class A {}
+        console.log({} instanceof A, Math instanceof A);
+    }
+    expect_stdout: SyntaxError("Identifier has already been declared")
+    node_version: ">=4"
+}
+
+keep_instanceof_3: {
+    options = {
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        class A {}
+        A = Object;
+        console.log({} instanceof A, Math instanceof A);
+    }
+    expect: {
+        "use strict";
+        class A {}
+        A = Object;
+        console.log({} instanceof A, Math instanceof A);
+    }
+    expect_stdout: "true true"
+    node_version: ">=4"
+}
+
+keep_field_reference_1: {
+    options = {
+        reduce_funcs: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        function f() {}
+        class A {
+            p = f;
+        }
+        console.log(new A().p === new A().p ? "PASS" : "FAIL");
+    }
+    expect: {
+        "use strict";
+        function f() {}
+        class A {
+            p = f;
+        }
+        console.log(new A().p === new A().p ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+keep_field_reference_2: {
+    options = {
+        reduce_funcs: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        function f() {}
+        var A = class {
+            p = f;
+        };
+        console.log(new A().p === new A().p ? "PASS" : "FAIL");
+    }
+    expect: {
+        "use strict";
+        function f() {}
+        var A = class {
+            p = f;
+        };
+        console.log(new A().p === new A().p ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+keep_field_reference_3: {
+    options = {
+        reduce_funcs: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        class A {}
+        class B {
+            p = A;
+        }
+        console.log(new B().p === new B().p ? "PASS" : "FAIL");
+    }
+    expect: {
+        "use strict";
+        class A {}
+        class B {
+            p = A;
+        }
+        console.log(new B().p === new B().p ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+keep_field_reference_4: {
+    options = {
+        reduce_funcs: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        var A = class {};
+        var B = class {
+            p = A;
+        };
+        console.log(new B().p === new B().p ? "PASS" : "FAIL");
+    }
+    expect: {
+        "use strict";
+        var A = class {};
+        var B = class {
+            p = A;
+        };
+        console.log(new B().p === new B().p ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+keep_static_field_reference_1: {
+    options = {
+        reduce_funcs: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        function f() {}
+        class A {
+            static P = f;
+        }
+        console.log(A.P === A.P ? "PASS" : "FAIL");
+    }
+    expect: {
+        "use strict";
+        class A {
+            static P = function() {};
+        }
+        console.log(A.P === A.P ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+keep_static_field_reference_2: {
+    options = {
+        reduce_funcs: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        function f() {}
+        var A = class {
+            static P = f;
+        };
+        console.log(A.P === A.P ? "PASS" : "FAIL");
+    }
+    expect: {
+        "use strict";
+        var A = class {
+            static P = function() {};
+        };
+        console.log(A.P === A.P ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+keep_static_field_reference_3: {
+    options = {
+        reduce_funcs: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        class A {}
+        class B {
+            static P = A;
+        }
+        console.log(B.P === B.P ? "PASS" : "FAIL");
+    }
+    expect: {
+        "use strict";
+        class B {
+            static P = class {};
+        }
+        console.log(B.P === B.P ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+keep_static_field_reference_4: {
+    options = {
+        reduce_funcs: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        var A = class {};
+        var B = class {
+            static P = A;
+        };
+        console.log(B.P === B.P ? "PASS" : "FAIL");
+    }
+    expect: {
+        "use strict";
+        var B = class {
+            static P = class {};
+        };
+        console.log(B.P === B.P ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
 }
 
 issue_805_1: {
     options = {
         inline: true,
-        passes: 2,
+        passes: 3,
         pure_getters: "strict",
         reduce_vars: true,
         sequences: true,
@@ -926,7 +1756,7 @@ issue_805_1: {
 issue_805_2: {
     options = {
         inline: true,
-        passes: 2,
+        passes: 3,
         pure_getters: "strict",
         reduce_vars: true,
         sequences: true,
@@ -1149,6 +1979,31 @@ issue_4705: {
         }
     }
     expect: {
+        (class {
+            [console.log("PASS")]() {}
+        });
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+issue_4705_strict: {
+    options = {
+        evaluate: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        var a = "PASS";
+        class A {
+            p = a = "FAIL";
+            [console.log(a)];
+        }
+    }
+    expect: {
+        "use strict";
         console.log("PASS");
     }
     expect_stdout: "PASS"
@@ -1310,6 +2165,7 @@ issue_4725_1: {
 
 issue_4725_2: {
     options = {
+        if_return: true,
         inline: true,
     }
     input: {
@@ -1370,9 +2226,40 @@ issue_4756: {
     expect: {
         try {
             (class extends 42 {
-                [console.log("foo")]() {}
-            }),
-            (() => console.log("bar"))();
+                static [console.log("foo")] = console.log("bar");
+            });
+        } catch (e) {
+            console.log("baz");
+        }
+    }
+    expect_stdout: [
+        "foo",
+        "baz",
+    ]
+    node_version: ">=12"
+}
+
+issue_4756_strict: {
+    options = {
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        try {
+            class A extends 42 {
+                static [console.log("foo")] = console.log("bar");
+            }
+        } catch (e) {
+            console.log("baz");
+        }
+    }
+    expect: {
+        "use strict";
+        try {
+            (class extends 42 {
+                static [console.log("foo")] = console.log("bar");
+            });
         } catch (e) {
             console.log("baz");
         }
@@ -1439,7 +2326,7 @@ issue_4829_1: {
     input: {
         "use strict";
         try {
-            class A extends { f(){} }.f {}
+            class A extends { f() {} }.f {}
         } catch (e) {
             console.log("PASS");
         }
@@ -1491,6 +2378,7 @@ issue_4829_2: {
 mangle_properties: {
     mangle = {
         properties: {
+            domprops: true,
             keep_quoted: true,
         },
     }
@@ -1527,6 +2415,14 @@ mangle_properties: {
         console.log(A.s, new A().e);
     }
     expect_stdout: "PASS 42"
+    expect_warnings: [
+        "INFO: Preserving reserved property q",
+        "INFO: Mapping property #P to #t",
+        "INFO: Mapping property Q to s",
+        "INFO: Mapping property #p to #i",
+        "INFO: Mapping property r to e",
+        "INFO: Preserving reserved property log",
+    ]
     node_version: ">=14.6"
 }
 
@@ -1631,6 +2527,7 @@ issue_4962_1: {
     options = {
         ie: true,
         inline: true,
+        reduce_funcs: true,
         reduce_vars: true,
         unused: true,
     }
@@ -1645,10 +2542,74 @@ issue_4962_1: {
         })(function g() {});
     }
     expect: {
+        (function() {
+            function f() {
+                while (console.log(typeof g));
+            }
+            (class {
+                static c = f();
+            });
+        })(function g() {});
+    }
+    expect_stdout: "undefined"
+    node_version: ">=12"
+}
+
+issue_4962_1_strict: {
+    options = {
+        ie: true,
+        inline: true,
+        reduce_funcs: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        (function() {
+            function f() {
+                while (console.log(typeof g));
+            }
+            class A {
+                static p = f();
+            }
+        })(function g() {});
+    }
+    expect: {
+        "use strict";
+        (function g() {});
+        while (console.log(typeof g));
+    }
+    expect_stdout: "undefined"
+    node_version: ">=12"
+}
+
+issue_4962_1_strict_direct: {
+    options = {
+        ie: true,
+        inline: true,
+        reduce_funcs: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        (function() {
+            function f() {
+                "use strict";
+                while (console.log(typeof g));
+            }
+            class A {
+                static p = f();
+            }
+        })(function g() {});
+    }
+    expect: {
         (function g() {}),
-        void function() {
-            while (console.log(typeof g));
-        }();
+        void class {
+            static c = function() {
+                "use strict";
+                while (console.log(typeof g));
+            }();
+        };
     }
     expect_stdout: "undefined"
     node_version: ">=12"
@@ -1658,6 +2619,7 @@ issue_4962_2: {
     options = {
         ie: true,
         inline: true,
+        reduce_funcs: true,
         reduce_vars: true,
         unused: true,
     }
@@ -1673,7 +2635,106 @@ issue_4962_2: {
     }
     expect: {
         console.log(function f() {}(function g() {
+            function h() {
+                f;
+            }
+            (class {
+                static c = h();
+            });
+        }));
+    }
+    expect_stdout: "undefined"
+    node_version: ">=12"
+}
+
+issue_4962_2_strict: {
+    options = {
+        ie: true,
+        inline: true,
+        reduce_funcs: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        console.log(function f() {}(function g() {
+            function h() {
+                f;
+            }
+            class A {
+                static p = h();
+            }
+        }, typeof g));
+    }
+    expect: {
+        "use strict";
+        console.log(function f() {}(function g() {
             f;
+        }));
+    }
+    expect_stdout: "undefined"
+    node_version: ">=12"
+}
+
+issue_4962_2_strict_direct: {
+    options = {
+        ie: true,
+        inline: true,
+        reduce_funcs: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        console.log(function f() {}(function g() {
+            function h() {
+                "use strict";
+                f;
+            }
+            class A {
+                static p = h();
+            }
+        }, typeof g));
+    }
+    expect: {
+        console.log(function f() {}(function g() {
+            (class {
+                static c = function() {
+                    "use strict";
+                    f;
+                }();
+            });
+        }));
+    }
+    expect_stdout: "undefined"
+    node_version: ">=12"
+}
+
+issue_4962_2_strict_direct_inline: {
+    options = {
+        directives: true,
+        ie: true,
+        inline: true,
+        passes: 2,
+        reduce_funcs: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        console.log(function f() {}(function g() {
+            function h() {
+                "use strict";
+                f;
+            }
+            class A {
+                static p = h();
+            }
+        }, typeof g));
+    }
+    expect: {
+        console.log(function f() {}(function g() {
+            (class {
+                static c = f;
+            });
         }));
     }
     expect_stdout: "undefined"
@@ -1870,6 +2931,32 @@ issue_5015_3: {
     }
     expect: {
         "use strict";
+        (class A {});
+        console.log("PASS");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+issue_5015_4: {
+    options = {
+        reduce_vars: true,
+        sequences: true,
+        side_effects: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        (class A {
+            static f() {
+                return A;
+            }
+        });
+        console.log("PASS");
+    }
+    expect: {
+        "use strict";
         console.log("PASS");
     }
     expect_stdout: "PASS"
@@ -2012,6 +3099,7 @@ issue_5053_4: {
 issue_5082_1: {
     options = {
         inline: true,
+        reduce_funcs: true,
         reduce_vars: true,
         unused: true,
     }
@@ -2027,6 +3115,41 @@ issue_5082_1: {
         })();
     }
     expect: {
+        (function() {
+            class A {
+                p = console.log("PASS");
+                q() {}
+            }
+            (class {
+                static c = new A();
+            });
+        })();
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+issue_5082_1_strict: {
+    options = {
+        inline: true,
+        reduce_funcs: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        (function() {
+            class A {
+                p = console.log("PASS");
+                q() {}
+            }
+            class B {
+                static P = new A();
+            }
+        })();
+    }
+    expect: {
+        "use strict";
         (function() {
             class A {
                 p = console.log("PASS");
@@ -2043,6 +3166,7 @@ issue_5082_2: {
     options = {
         inline: true,
         passes: 2,
+        reduce_funcs: true,
         reduce_vars: true,
         unused: true,
     }
@@ -2058,6 +3182,42 @@ issue_5082_2: {
         })();
     }
     expect: {
+        (function() {
+            class A {
+                p = console.log("PASS");
+                q() {}
+            }
+            (class {
+                static c = new A();
+            });
+        })();
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+issue_5082_2_static: {
+    options = {
+        inline: true,
+        passes: 2,
+        reduce_funcs: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        (function() {
+            class A {
+                p = console.log("PASS");
+                q() {}
+            }
+            class B {
+                static P = new A();
+            }
+        })();
+    }
+    expect: {
+        "use strict";
         void new class {
             p = console.log("PASS");
             q() {}
@@ -2096,4 +3256,648 @@ issue_5142: {
     }
     expect_stdout: "PASS"
     node_version: ">=12"
+}
+
+issue_5294_1: {
+    options = {
+        reduce_vars: true,
+        side_effects: true,
+        toplevel: true,
+    }
+    input: {
+        (class A {
+            static p = console.log(typeof A);
+        });
+    }
+    expect: {
+        (class A {
+            static c = console.log(typeof A);
+        });
+    }
+    expect_stdout: "function"
+    node_version: ">=12"
+}
+
+issue_5294_2: {
+    options = {
+        reduce_vars: true,
+        side_effects: true,
+        toplevel: true,
+    }
+    input: {
+        class A {
+            static p = console.log(typeof A);
+        }
+    }
+    expect: {
+        class A {
+            static p = console.log(typeof A);
+        }
+    }
+    expect_stdout: "function"
+    node_version: ">=12"
+}
+
+issue_5294_3: {
+    options = {
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a = this;
+        (class A {
+            static p = console.log(a === A ? "FAIL" : "PASS");
+        });
+    }
+    expect: {
+        var a = this;
+        (class A {
+            static p = console.log(a === A ? "FAIL" : "PASS");
+        });
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+issue_5294_4: {
+    options = {
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        (class A {
+            static p = function() {
+                var a = this;
+                console.log(a === A ? "FAIL" : "PASS");
+            }();
+        });
+    }
+    expect: {
+        (class A {
+            static p = function() {
+                console.log(this === A ? "FAIL" : "PASS");
+            }();
+        });
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+issue_5322: {
+    options = {
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a = 41;
+        class A {
+            static p() {
+                console.log(++a);
+            }
+            static q = this.p();
+        }
+    }
+    expect: {
+        var a = 41;
+        (class {
+            static p() {
+                console.log(++a);
+            }
+            static q = this.p();
+        });
+    }
+    expect_stdout: "42"
+    node_version: ">=12"
+}
+
+issue_5352: {
+    options = {
+        merge_vars: true,
+    }
+    input: {
+        function f(a) {
+            var b;
+            new class {
+                [b = console.log(a)] = b;
+            }(a.p);
+        }
+        f("PASS");
+    }
+    expect: {
+        function f(a) {
+            var b;
+            new class {
+                [b = console.log(a)] = b;
+            }(a.p);
+        }
+        f("PASS");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+issue_5387: {
+    options = {
+        properties: true,
+    }
+    input: {
+        "use strict";
+        (function(a) {
+            try {
+                class A extends a {}
+            } catch (e) {
+                console.log("PASS");
+            }
+        })({
+            f() {
+                return this;
+            }
+        }.f);
+    }
+    expect: {
+        "use strict";
+        (function(a) {
+            try {
+                class A extends a {}
+            } catch (e) {
+                console.log("PASS");
+            }
+        })({
+            f() {
+                return this;
+            }
+        }.f);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+issue_5389_1: {
+    options = {
+        collapse_vars: true,
+        toplevel: true,
+    }
+    input: {
+        function log(m, n) {
+            console.log(m, n);
+        }
+        var a = log;
+        class A {
+            [a = "FAIL"] = a = "PASS";
+        }
+        var b = new A();
+        log(a, b.FAIL);
+    }
+    expect: {
+        function log(m, n) {
+            console.log(m, n);
+        }
+        var a = log;
+        class A {
+            [a = "FAIL"] = a = "PASS";
+        }
+        var b = new A();
+        log(a, b.FAIL);
+    }
+    expect_stdout: "PASS PASS"
+    node_version: ">=12"
+}
+
+issue_5389_2: {
+    options = {
+        collapse_vars: true,
+        toplevel: true,
+    }
+    input: {
+        function log(m, n) {
+            console.log(m, n);
+        }
+        var a = log;
+        var A = class {
+            [a = "FAIL"] = a = "PASS";
+        };
+        var b = new A();
+        log(a, b.FAIL);
+    }
+    expect: {
+        function log(m, n) {
+            console.log(m, n);
+        }
+        var a = log;
+        var A;
+        var b = new class {
+            [a = "FAIL"] = a = "PASS";
+        }();
+        log(a, b.FAIL);
+    }
+    expect_stdout: "PASS PASS"
+    node_version: ">=12"
+}
+
+issue_5436: {
+    options = {
+        merge_vars: true,
+    }
+    input: {
+        function f(a) {
+            class A {
+                p = a;
+            }
+            var b = "FAIL";
+            A == b && b();
+            return new A();
+        }
+        console.log(f("PASS").p);
+    }
+    expect: {
+        function f(a) {
+            class A {
+                p = a;
+            }
+            var b = "FAIL";
+            A == b && b();
+            return new A();
+        }
+        console.log(f("PASS").p);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=12"
+}
+
+issue_5481: {
+    options = {
+        collapse_vars: true,
+    }
+    input: {
+        "use strict";
+        var a = "FAIL 1", log = console.log;
+        try {
+            a = "PASS";
+            (class extends 42 {});
+            log("FAIL 2", a);
+        } catch (e) {
+            log(a);
+        }
+    }
+    expect: {
+        "use strict";
+        var a = "FAIL 1", log = console.log;
+        try {
+            a = "PASS";
+            (class extends 42 {});
+            log("FAIL 2", a);
+        } catch (e) {
+            log(a);
+        }
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+issue_5489: {
+    options = {
+        side_effects: true,
+    }
+    input: {
+        (class {
+            [console.log("foo")];
+            static {
+                console.log("bar");
+            }
+            static [console.log("baz")]() {}
+        });
+    }
+    expect: {
+        (class {
+            [(console.log("foo"), console.log("baz"))];
+            static {
+                console.log("bar");
+            }
+        });
+    }
+    expect_stdout: [
+        "foo",
+        "baz",
+        "bar",
+    ]
+    node_version: ">=16"
+}
+
+issue_5489_strict: {
+    options = {
+        side_effects: true,
+    }
+    input: {
+        "use strict";
+        (class {
+            [console.log("foo")];
+            static {
+                console.log("bar");
+            }
+            static [console.log("baz")]() {}
+        });
+    }
+    expect: {
+        "use strict";
+        console.log("foo"),
+        console.log("baz"),
+        (() => (() => {
+            console.log("bar");
+        })())();
+    }
+    expect_stdout: [
+        "foo",
+        "baz",
+        "bar",
+    ]
+    node_version: ">=16"
+}
+
+issue_5502: {
+    options = {
+        collapse_vars: true,
+    }
+    input: {
+        "use strict";
+        var a = "FAIL";
+        class A {
+            static p = a;
+            [a = "PASS"];
+        }
+        try {
+            b++;
+        } finally {
+            var a, b = 42;
+        }
+        console.log(a, b);
+    }
+    expect: {
+        "use strict";
+        var a = "FAIL";
+        class A {
+            static p = a;
+            [a = "PASS"];
+        }
+        try {
+            b++;
+        } finally {
+            var a, b = 42;
+        }
+        console.log(a, b);
+    }
+    expect_stdout: "PASS 42"
+    node_version: ">=12"
+}
+
+issue_5504: {
+    options = {
+        collapse_vars: true,
+    }
+    input: {
+        "use strict";
+        var a;
+        console.log((a = 42, class {
+            static p;
+        }).p);
+    }
+    expect: {
+        "use strict";
+        var a;
+        console.log((a = 42, class {
+            static p;
+        }).p);
+    }
+    expect_stdout: "undefined"
+    node_version: ">=12"
+}
+
+issue_5512: {
+    options = {
+        collapse_vars: true,
+    }
+    input: {
+        "use strict";
+        a = "PASS";
+        class A {
+            static {
+                console.log(a);
+            }
+            static p = "PASS";
+        }
+        var a;
+    }
+    expect: {
+        "use strict";
+        a = "PASS";
+        class A {
+            static {
+                console.log(a);
+            }
+            static p = "PASS";
+        }
+        var a;
+    }
+    expect_stdout: "PASS"
+    node_version: ">=16"
+}
+
+issue_5531_1: {
+    options = {
+        inline: true,
+        toplevel: true,
+    }
+    input: {
+        class A {
+            p = function() {
+                var a = function f() {
+                    if (!a)
+                        console.log("foo");
+                    return 42;
+                }(a++);
+            }();
+        }
+        new A();
+        new A();
+    }
+    expect: {
+        class A {
+            p = function() {
+                var a = function f() {
+                    if (!a)
+                        console.log("foo");
+                    return 42;
+                }(a++);
+            }();
+        }
+        new A();
+        new A();
+    }
+    expect_stdout: [
+        "foo",
+        "foo",
+    ]
+    node_version: ">=12"
+}
+
+issue_5531_2: {
+    options = {
+        inline: true,
+        toplevel: true,
+    }
+    input: {
+        class A {
+            static p = function() {
+                var a = function f() {
+                    if (!a)
+                        console.log("foo");
+                    return 42;
+                }(a++);
+            }();
+        }
+        new A();
+        new A();
+    }
+    expect: {
+        class A {
+            static p = (a = function f() {
+                if (!a)
+                    console.log("foo");
+                return 42;
+            }(a++), void 0);
+        }
+        var a;
+        new A();
+        new A();
+    }
+    expect_stdout: "foo"
+    node_version: ">=12"
+}
+
+issue_5531_3: {
+    options = {
+        inline: true,
+    }
+    input: {
+        class A {
+            static {
+                (function() {
+                    var a = function f() {
+                        if (!a)
+                            console.log("foo");
+                        return 42;
+                    }(a++);
+                })();
+            }
+        }
+        new A();
+        new A();
+    }
+    expect: {
+        class A {
+            static {
+                a = function f() {
+                    if (!a)
+                        console.log("foo");
+                    return 42;
+                }(a++),
+                void 0;
+                var a;
+            }
+        }
+        new A();
+        new A();
+    }
+    expect_stdout: "foo"
+    node_version: ">=16"
+}
+
+issue_5662: {
+    options = {
+        inline: true,
+        reduce_vars: true,
+    }
+    input: {
+        console.log(new (function() {
+            var g = function(a) {
+                return a;
+            };
+            return class {
+                h(b) {
+                    return g(b);
+                }
+            };
+        }())().h("PASS"));
+    }
+    expect: {
+        console.log(new (function() {
+            var g = function(a) {
+                return a;
+            };
+            return class {
+                h(b) {
+                    return g(b);
+                }
+            };
+        }())().h("PASS"));
+    }
+    expect_stdout: "PASS"
+    node_version: ">=6"
+}
+
+issue_5682_class_key: {
+    mangle = {
+        properties: true,
+    }
+    input: {
+        "use strict";
+        function f(a) {
+            return "foo" in a;
+        }
+        class A {
+            foo() {}
+        }
+        console.log(f(new A()) ? "PASS" : "FAIL");
+    }
+    expect: {
+        "use strict";
+        function f(o) {
+            return "o" in o;
+        }
+        class A {
+            o() {}
+        }
+        console.log(f(new A()) ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+issue_5682_class_key_computed: {
+    mangle = {
+        properties: true,
+    }
+    input: {
+        "use strict";
+        function f(a) {
+            return "foo" in a;
+        }
+        class A {
+            ["foo"]() {}
+        }
+        console.log(f(new A()) ? "PASS" : "FAIL");
+    }
+    expect: {
+        "use strict";
+        function f(o) {
+            return "o" in o;
+        }
+        class A {
+            ["o"]() {}
+        }
+        console.log(f(new A()) ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
 }

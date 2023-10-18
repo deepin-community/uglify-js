@@ -62,7 +62,7 @@ assignment_2: {
     }
     expect_exact: "var a=8n;a**=a;console.log(a);"
     expect_stdout: "16777216n"
-    node_version: ">=10"
+    node_version: ">=10.4.0"
 }
 
 evaluate: {
@@ -99,8 +99,8 @@ issue_4664: {
     expect: {
         (function f() {
             new function(a) {
-                console.log(typeof f, a, typeof this);
-            }((A = 0, 2 ** 30));
+                console.log(typeof f, 2 ** 30, typeof this);
+            }(A = 0);
         })();
     }
     expect_stdout: "function 1073741824 object"

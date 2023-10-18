@@ -12,7 +12,9 @@ Files: CONTRIBUTING.md
  debian/libjs-uglify-js.install
  debian/node-uglify-js.install
  debian/rules
+ debian/salsa-ci.yml
  debian/source/format
+ debian/source/lintian-overrides
  debian/tests/control
  debian/tests/uglifyjs.t
  debian/uglifyjs.install
@@ -29,7 +31,6 @@ Files: CONTRIBUTING.md
  test/compress/arrows.js
  test/compress/asm.js
  test/compress/assignments.js
- test/compress/awaits.js
  test/compress/bigint.js
  test/compress/blocks.js
  test/compress/booleans.js
@@ -51,6 +52,7 @@ Files: CONTRIBUTING.md
  test/compress/hoist_vars.js
  test/compress/html_comments.js
  test/compress/imports.js
+ test/compress/indentation.js
  test/compress/issue-1034.js
  test/compress/issue-1041.js
  test/compress/issue-1052.js
@@ -88,6 +90,7 @@ Files: CONTRIBUTING.md
  test/compress/issue-368.js
  test/compress/issue-3768.js
  test/compress/issue-44.js
+ test/compress/issue-5614.js
  test/compress/issue-59.js
  test/compress/issue-597.js
  test/compress/issue-611.js
@@ -124,7 +127,6 @@ Files: CONTRIBUTING.md
  test/compress/return_undefined.js
  test/compress/sandbox.js
  test/compress/side_effects.js
- test/compress/spreads.js
  test/compress/string-literal.js
  test/compress/switches.js
  test/compress/templates.js
@@ -134,7 +136,6 @@ Files: CONTRIBUTING.md
  test/compress/varify.js
  test/compress/webkit.js
  test/compress/wrap_iife.js
- test/compress/yields.js
  test/exports.js
  test/fetch.js
  test/input/comments/filter.js
@@ -198,12 +199,15 @@ Files: CONTRIBUTING.md
  test/input/issue-505/output.js
  test/input/issue-520/input.js
  test/input/issue-520/output.js
+ test/input/module/expect.js
+ test/input/module/input.js
  test/input/reduce/destructured_assign.js
  test/input/reduce/destructured_assign.reduced.js
  test/input/reduce/destructured_catch.js
  test/input/reduce/destructured_catch.reduced.js
  test/input/reduce/diff_error.js
  test/input/reduce/diff_error.reduced.js
+ test/input/reduce/export_default.js
  test/input/reduce/label.js
  test/input/reduce/label.reduced.js
  test/input/reduce/setter.js
@@ -303,6 +307,12 @@ Copyright: b = "PASS";
 License: UNKNOWN
  FIXME
 
+Files: test/compress/awaits.js
+ test/compress/yields.js
+Copyright: console.log(typeof d);
+License: UNKNOWN
+ FIXME
+
 Files: package.json
 Copyright: NONE
 License: BSD-2-clause
@@ -329,12 +339,6 @@ Copyright: console.log("PASS");
 License: UNKNOWN
  FIXME
 
-Files: debian/source/lintian-overrides
-Copyright: debian/copyright GPL-3+
-  debian/copyright gpl-3+
-License: UNKNOWN
- FIXME
-
 Files: test/compress/destructured.js
 Copyright: return "FAIL 1";
 License: UNKNOWN
@@ -342,6 +346,11 @@ License: UNKNOWN
 
 Files: test/compress/if_return.js
 Copyright: return D;
+License: UNKNOWN
+ FIXME
+
+Files: test/compress/spreads.js
+Copyright: return FAIL;
 License: UNKNOWN
  FIXME
 

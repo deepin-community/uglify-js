@@ -96,7 +96,7 @@ pause_resume: {
     node_version: ">=4"
 }
 
-arrow_yield: {
+arrow_yield_1: {
     input: {
         yield = "PASS";
         console.log(function*() {
@@ -106,6 +106,18 @@ arrow_yield: {
     expect_exact: 'yield="PASS";console.log(function*(){return()=>yield||"FAIL"}().next().value());'
     expect_stdout: "PASS"
     node_version: ">=4"
+}
+
+arrow_yield_2: {
+    input: {
+        console.log(typeof function *() {
+            // Syntax error on Node.js v6+
+            return (yield) => {};
+        }().next().value);
+    }
+    expect_exact: "console.log(typeof function*(){return(yield)=>{}}().next().value);"
+    expect_stdout: "function"
+    node_version: "4"
 }
 
 for_of: {
@@ -737,7 +749,7 @@ lift_sequence: {
     node_version: ">=4"
 }
 
-inline_nested_yield: {
+inline_nested: {
     options = {
         inline: true,
         sequences: true,
@@ -772,6 +784,118 @@ inline_nested_yield: {
     node_version: ">=4"
 }
 
+inline_nested_async: {
+    options = {
+        awaits: true,
+        inline: true,
+        sequences: true,
+        side_effects: true,
+        yields: true,
+    }
+    input: {
+        console.log("foo");
+        var a = async function*() {
+            console.log(await(yield* async function*() {
+                yield {
+                    then: r => r("bar"),
+                };
+                return "baz";
+            }()));
+        }();
+        console.log("moo");
+        a.next().then(function f(b) {
+            console.log(b.value);
+            b.done || a.next().then(f);
+        });
+        console.log("moz");
+    }
+    expect: {
+        console.log("foo");
+        var a = async function*() {
+            console.log((yield {
+                then: r => r("bar"),
+            }, await "baz"));
+        }();
+        console.log("moo"),
+        a.next().then(function f(b) {
+            console.log(b.value),
+            b.done || a.next().then(f);
+        }),
+        console.log("moz");
+    }
+    expect_stdout: [
+        "foo",
+        "moo",
+        "moz",
+        "bar",
+        "baz",
+        "undefined",
+    ]
+    node_version: ">=10"
+}
+
+inline_nested_block: {
+    options = {
+        if_return: true,
+        inline: true,
+        yields: true,
+    }
+    input: {
+        var a = function*() {
+            yield* function*() {
+                for (var a of [ "foo", "bar" ])
+                    yield a;
+                return "FAIL";
+            }();
+        }(), b;
+        do {
+            b = a.next();
+            console.log(b.value);
+        } while (!b.done);
+    }
+    expect: {
+        var a = function*() {
+            for (var a of [ "foo", "bar" ])
+                yield a;
+            "FAIL";
+        }(), b;
+        do {
+            b = a.next();
+            console.log(b.value);
+        } while (!b.done);
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "undefined",
+    ]
+    node_version: ">=4"
+}
+
+dont_inline_nested: {
+    options = {
+        inline: true,
+    }
+    input: {
+        var yield = "PASS";
+        (function*() {
+            (function() {
+                console.log(yield);
+            })();
+        })().next();
+    }
+    expect: {
+        var yield = "PASS";
+        (function*() {
+            (function() {
+                console.log(yield);
+            })();
+        })().next();
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
 drop_body: {
     options = {
         side_effects: true,
@@ -783,7 +907,7 @@ drop_body: {
         })([ console.log("baz") ]);
     }
     expect: {
-        [ [ , [].e = console.log("foo") ] ] = [ [ console.log("baz") ] ];
+        [ [ , [][0] = console.log("foo") ] ] = [ [ console.log("baz") ] ];
     }
     expect_stdout: [
         "baz",
@@ -807,6 +931,21 @@ drop_unused_call: {
         console.log("PASS");
     }
     expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+instanceof_lambda: {
+    options = {
+        evaluate: true,
+        side_effects: true,
+    }
+    input: {
+        console.log(42 instanceof function*() {});
+    }
+    expect: {
+        console.log(false);
+    }
+    expect_stdout: "false"
     node_version: ">=4"
 }
 
@@ -852,8 +991,8 @@ issue_4454_2: {
         f("PASS");
     }
     expect: {
-        function f(b) {
-            (function*(c = console.log(b)) {})();
+        function f(a) {
+            (function*(c = console.log(a)) {})();
             var b = 42..toString();
             console.log(b);
         }
@@ -958,7 +1097,7 @@ issue_4639_1: {
         }().next().value());
     }
     expect_stdout: "PASS"
-    node_version: ">=4"
+    node_version: ">=4 <7 || >=8.7.0"
 }
 
 issue_4639_2: {
@@ -1032,6 +1171,35 @@ issue_4641_2: {
         console.log(typeof async function*() {
             try {
                 return void 0;
+            } finally {
+                console.log("PASS");
+            }
+        }().next().then);
+    }
+    expect_stdout: [
+        "function",
+        "PASS",
+    ]
+    node_version: ">=10"
+}
+
+issue_4641_3: {
+    options = {
+        if_return: true,
+    }
+    input: {
+        console.log(typeof async function*() {
+            try {
+                return void "FAIL";
+            } finally {
+                console.log("PASS");
+            }
+        }().next().then);
+    }
+    expect: {
+        console.log(typeof async function*() {
+            try {
+                return void "FAIL";
             } finally {
                 console.log("PASS");
             }
@@ -1143,80 +1311,6 @@ issue_5019_2: {
     node_version: ">=4"
 }
 
-issue_5032_normal: {
-    options = {
-        merge_vars: true,
-        webkit: false,
-    }
-    input: {
-        function log(value) {
-            console.log(value);
-            return value;
-        }
-        function *f(a) {
-            var b = log(a), c = b;
-            log(b);
-            log(c);
-        }
-        f("PASS").next();
-    }
-    expect: {
-        function log(value) {
-            console.log(value);
-            return value;
-        }
-        function *f(c) {
-            var b = log(c), c = b;
-            log(b);
-            log(c);
-        }
-        f("PASS").next();
-    }
-    expect_stdout: [
-        "PASS",
-        "PASS",
-        "PASS",
-    ]
-    node_version: ">=4"
-}
-
-issue_5032_webkit: {
-    options = {
-        merge_vars: true,
-        webkit: true,
-    }
-    input: {
-        function log(value) {
-            console.log(value);
-            return value;
-        }
-        function *f(a) {
-            var b = log(a), c = b;
-            log(b);
-            log(c);
-        }
-        f("PASS").next();
-    }
-    expect: {
-        function log(value) {
-            console.log(value);
-            return value;
-        }
-        function *f(a) {
-            var b = log(a), c = b;
-            log(b);
-            log(c);
-        }
-        f("PASS").next();
-    }
-    expect_stdout: [
-        "PASS",
-        "PASS",
-        "PASS",
-    ]
-    node_version: ">=4"
-}
-
 issue_5034: {
     options = {
         functions: true,
@@ -1247,12 +1341,13 @@ issue_5034: {
     node_version: ">=4"
 }
 
-issue_5076: {
+issue_5076_1: {
     options = {
         evaluate: true,
         hoist_vars: true,
-        passes: 2,
+        keep_fargs: false,
         pure_getters: "strict",
+        sequences: true,
         side_effects: true,
         toplevel: true,
         unused: true,
@@ -1269,9 +1364,715 @@ issue_5076: {
     }
     expect: {
         var a;
-        console.log("PASS");
+        console.log("PASS"),
         a = 42["a"];
     }
     expect_stdout: "PASS"
     node_version: ">=6"
+}
+
+issue_5076_2: {
+    options = {
+        evaluate: true,
+        hoist_vars: true,
+        keep_fargs: false,
+        passes: 2,
+        pure_getters: "strict",
+        sequences: true,
+        side_effects: true,
+        toplevel: true,
+        unused: true,
+        yields: true,
+    }
+    input: {
+        var a;
+        console.log("PASS");
+        var b = function*({
+            p: {},
+        }) {}({
+            p: { a } = 42,
+        });
+    }
+    expect: {
+        console.log("PASS");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=6"
+}
+
+issue_5177: {
+    options = {
+        properties: true,
+    }
+    input: {
+        console.log(typeof function*() {
+            return {
+                p(yield) {},
+            }.p;
+        }().next().value);
+    }
+    expect: {
+        console.log(typeof function*() {
+            return {
+                p(yield) {},
+            }.p;
+        }().next().value);
+    }
+    expect_stdout: "function"
+    node_version: ">=4"
+}
+
+issue_5385_1: {
+    options = {
+        inline: true,
+    }
+    input: {
+        (async function*() {
+            (function() {
+                try {
+                    return console.log("foo");
+                } finally {
+                    return console.log("bar");
+                }
+                console.log("baz");
+            })();
+        })().next();
+        console.log("moo");
+    }
+    expect: {
+        (async function*() {
+            (function() {
+                try {
+                    return console.log("foo");
+                } finally {
+                    return console.log("bar");
+                }
+                console.log("baz");
+            })();
+        })().next();
+        console.log("moo");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "moo",
+    ]
+    node_version: ">=10"
+}
+
+issue_5385_2: {
+    options = {
+        inline: true,
+    }
+    input: {
+        (async function*() {
+            return function() {
+                try {
+                    return console.log("foo");
+                } finally {
+                    return console.log("bar");
+                }
+            }();
+        })().next();
+        console.log("moo");
+    }
+    expect: {
+        (async function*() {
+            return function() {
+                try {
+                    return console.log("foo");
+                } finally {
+                    return console.log("bar");
+                }
+            }();
+        })().next();
+        console.log("moo");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "moo",
+    ]
+    node_version: ">=10"
+}
+
+issue_5385_3: {
+    options = {
+        inline: true,
+    }
+    input: {
+        (async function*() {
+            return function() {
+                try {
+                    throw console.log("foo");
+                } catch (e) {
+                    return console.log("bar");
+                }
+            }();
+        })().next();
+        console.log("moo");
+    }
+    expect: {
+        (async function*() {
+            try {
+                throw console.log("foo");
+            } catch (e) {
+                return console.log("bar");
+            }
+            return void 0;
+        })().next();
+        console.log("moo");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "moo",
+    ]
+    node_version: ">=10"
+}
+
+issue_5385_4: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        (async function*() {
+            return async function() {
+                try {
+                    return {
+                        then(resolve) {
+                            resolve(console.log("FAIL"));
+                        },
+                    };
+                } finally {
+                    return "PASS";
+                }
+            }();
+        })().next().then(o => console.log(o.value, o.done));
+    }
+    expect: {
+        (async function*() {
+            return async function() {
+                try {
+                    return {
+                        then(resolve) {
+                            resolve(console.log("FAIL"));
+                        },
+                    };
+                } finally {
+                    return "PASS";
+                }
+            }();
+        })().next().then(o => console.log(o.value, o.done));
+    }
+    expect_stdout: "PASS true"
+    node_version: ">=10"
+}
+
+issue_5425: {
+    options = {
+        assignments: true,
+        ie: true,
+        toplevel: true,
+        unused: true,
+        yields: true,
+    }
+    input: {
+        var a = "FAIL";
+        var b = function* f() {}(a ? a = "PASS" : 42);
+        console.log(a, typeof f);
+    }
+    expect: {
+        var a = "FAIL";
+        (function* f() {})(a && (a = "PASS"));
+        console.log(a, typeof f);
+    }
+    expect_stdout: "PASS undefined"
+    node_version: ">=4"
+}
+
+issue_5456: {
+    options = {
+        inline: true,
+        merge_vars: true,
+    }
+    input: {
+        var a = true;
+        (function() {
+            (function(b, c) {
+                var d = function*() {
+                    c = null;
+                }();
+                var e = function() {
+                    if (c)
+                        console.log(typeof d);
+                    while (b);
+                }();
+            })(function(i) {
+                return console.log("foo") && i;
+            }(a));
+        })();
+    }
+    expect: {
+        var a = true;
+        (function() {
+            b = (i = a, console.log("foo") && i),
+            d = function*() {
+                c = null;
+            }(),
+            e = function() {
+                if (c) console.log(typeof d);
+                while (b);
+            }(),
+            void 0;
+            var b, c, d, e;
+            var i;
+        })();
+    }
+    expect_stdout: "foo"
+    node_version: ">=4"
+}
+
+issue_5506: {
+    options = {
+        dead_code: true,
+    }
+    input: {
+        console.log(function(a) {
+            var b = function*() {
+                a = null in (a = "PASS");
+            }();
+            try {
+                b.next();
+            } catch (e) {
+                return a;
+            }
+        }("FAIL"));
+    }
+    expect: {
+        console.log(function(a) {
+            var b = function*() {
+                a = null in (a = "PASS");
+            }();
+            try {
+                b.next();
+            } catch (e) {
+                return a;
+            }
+        }("FAIL"));
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+issue_5526: {
+    options = {
+        inline: true,
+        side_effects: true,
+    }
+    input: {
+        (async function*() {
+            try {
+                return function() {
+                    while (console.log("foo"));
+                }();
+            } finally {
+                console.log("bar");
+            }
+        })().next();
+        console.log("baz");
+    }
+    expect: {
+        (async function*() {
+            try {
+                while (console.log("foo"));
+                return void 0;
+            } finally {
+                console.log("bar");
+            }
+        })().next();
+        console.log("baz");
+    }
+    expect_stdout: [
+        "foo",
+        "baz",
+        "bar",
+    ]
+    node_version: ">=10"
+}
+
+issue_5576: {
+    options = {
+        inline: true,
+    }
+    input: {
+        (async function*() {
+            try {
+                (function() {
+                    while (console.log("foo"));
+                })();
+            } finally {
+                console.log("bar");
+            }
+        })().next();
+        console.log("baz");
+    }
+    expect: {
+        (async function*() {
+            try {
+                while (console.log("foo"));
+            } finally {
+                console.log("bar");
+            }
+        })().next();
+        console.log("baz");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "baz",
+    ]
+    node_version: ">=10"
+}
+
+issue_5663: {
+    options = {
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var [ , a ] = function*() {
+            console.log("foo");
+            yield console.log("bar");
+            console.log("baz");
+            yield console.log("moo");
+            console.log("moz");
+            yield FAIL;
+        }();
+    }
+    expect: {
+        var [ , , ] = function*() {
+            console.log("foo");
+            yield console.log("bar");
+            console.log("baz");
+            yield console.log("moo");
+            console.log("moz");
+            yield FAIL;
+        }();
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "baz",
+        "moo",
+    ]
+    node_version: ">=6"
+}
+
+issue_5679_1: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        var a = "FAIL";
+        async function* f(b) {
+            try {
+                if (b)
+                    return;
+                else
+                    return;
+            } finally {
+                a = "PASS";
+            }
+        }
+        f().next();
+        console.log(a);
+    }
+    expect: {
+        var a = "FAIL";
+        async function* f(b) {
+            try {
+                b;
+                return;
+            } finally {
+                a = "PASS";
+            }
+        }
+        f().next();
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=10"
+}
+
+issue_5679_2: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        var a = "FAIL";
+        async function* f(b) {
+            try {
+                if (b)
+                    return undefined;
+                else
+                    return;
+            } finally {
+                a = "PASS";
+            }
+        }
+        f().next();
+        console.log(a);
+    }
+    expect: {
+        var a = "FAIL";
+        async function* f(b) {
+            try {
+                if (b)
+                    return void 0;
+                return;
+            } finally {
+                a = "PASS";
+            }
+        }
+        f().next();
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=10"
+}
+
+issue_5679_3: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        var a = "FAIL";
+        async function* f(b) {
+            try {
+                if (b)
+                    return;
+                else
+                    return undefined;
+            } finally {
+                a = "PASS";
+            }
+        }
+        f(42).next();
+        console.log(a);
+    }
+    expect: {
+        var a = "FAIL";
+        async function* f(b) {
+            try {
+                if (b)
+                    return;
+                return void 0;
+            } finally {
+                a = "PASS";
+            }
+        }
+        f(42).next();
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=10"
+}
+
+issue_5679_4: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        var a = "PASS";
+        async function* f(b) {
+            try {
+                if (b)
+                    return undefined;
+                else
+                    return undefined;
+            } finally {
+                a = "FAIL";
+            }
+        }
+        f(null).next();
+        console.log(a);
+    }
+    expect: {
+        var a = "PASS";
+        async function* f(b) {
+            try {
+                return b, void 0;
+            } finally {
+                a = "FAIL";
+            }
+        }
+        f(null).next();
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=10"
+}
+
+issue_5679_5: {
+    options = {
+        conditionals: true,
+        if_return: true,
+    }
+    input: {
+        var a = "FAIL";
+        async function* f(b) {
+            try {
+                if (b)
+                    return console;
+                else
+                    return;
+            } finally {
+                a = "PASS";
+            }
+        }
+        f().next();
+        console.log(a);
+    }
+    expect: {
+        var a = "FAIL";
+        async function* f(b) {
+            try {
+                if (b)
+                    return console;
+                return;
+            } finally {
+                a = "PASS";
+            }
+        }
+        f().next();
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=10"
+}
+
+issue_5679_6: {
+    options = {
+        conditionals: true,
+        if_return: true,
+    }
+    input: {
+        var a = "PASS";
+        async function* f(b) {
+            try {
+                if (b)
+                    return;
+                else
+                    return console;
+            } finally {
+                a = "FAIL";
+            }
+        }
+        f().next();
+        console.log(a);
+    }
+    expect: {
+        var a = "PASS";
+        async function* f(b) {
+            try {
+                if (!b)
+                    return console;
+            } finally {
+                a = "FAIL";
+            }
+        }
+        f().next();
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=10"
+}
+
+issue_5684: {
+    options = {
+        conditionals: true,
+        if_return: true,
+    }
+    input: {
+        (async function*() {
+            switch (42) {
+              default:
+                if (console.log("PASS"))
+                    return;
+                return null;
+              case false:
+            }
+        })().next();
+    }
+    expect: {
+        (async function*() {
+            switch (42) {
+              default:
+                return console.log("PASS") ? void 0 : null;
+              case false:
+            }
+        })().next();
+    }
+    expect_stdout: "PASS"
+    node_version: ">=10"
+}
+
+issue_5707: {
+    options = {
+        hoist_props: true,
+        reduce_vars: true,
+        side_effects: true,
+        toplevel: true,
+        unused: true,
+        yields: true,
+    }
+    input: {
+        var a, b;
+        function* f(c = (b = 42, console.log("PASS"))) {}
+        b = f();
+    }
+    expect: {
+        console.log("PASS");
+    }
+    expect_stdout: "PASS"
+    node_version: ">=6"
+}
+
+issue_5710: {
+    options = {
+        conditionals: true,
+        if_return: true,
+    }
+    input: {
+        (async function*() {
+            try {
+                switch (42) {
+                  case 42:
+                    {
+                        if (console.log("PASS"))
+                            return;
+                        return null;
+                    }
+                    break;
+                }
+            } finally {}
+        })().next();
+    }
+    expect: {
+        (async function*() {
+            try {
+                switch (42) {
+                  case 42:
+                    if (console.log("PASS"))
+                        return;
+                    return null;
+                    break;
+                }
+            } finally {}
+        })().next();
+    }
+    expect_stdout: "PASS"
+    node_version: ">=10"
 }

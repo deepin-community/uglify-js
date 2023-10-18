@@ -133,6 +133,7 @@ evaluate_string_length: {
 mangle_properties_1: {
     mangle = {
         properties: {
+            domprops: true,
             keep_quoted: false,
         },
     }
@@ -147,17 +148,18 @@ mangle_properties_1: {
         a["a"] = "bar";
         a.b = "red";
         x = {o: 10};
-        a.r(x.o, a.a);
-        a['r']({b: "blue", a: "baz"});
+        a.run(x.o, a.a);
+        a['run']({b: "blue", a: "baz"});
     }
 }
 
 mangle_properties_2: {
     mangle = {
         properties: {
+            domprops: true,
             reserved: [
                 "value",
-            ]
+            ],
         },
     }
     input: {
@@ -199,6 +201,24 @@ mangle_properties_2: {
     ]
 }
 
+mangle_properties_3: {
+    mangle = {
+        properties: true,
+    }
+    input: {
+        console.log({
+            [(console, "foo")]: "PASS",
+        }.foo);
+    }
+    expect: {
+        console.log({
+            [(console, "o")]: "PASS",
+        }.o);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
 mangle_unquoted_properties: {
     options = {
         evaluate: true,
@@ -206,6 +226,8 @@ mangle_unquoted_properties: {
     }
     mangle = {
         properties: {
+            builtins: true,
+            domprops: true,
             keep_quoted: true,
         },
     }
@@ -305,7 +327,9 @@ mangle_debug_suffix_keep_quoted: {
     }
     mangle = {
         properties: {
+            builtins: true,
             debug: "XYZ",
+            domprops: true,
             keep_quoted: true,
             reserved: [],
         },
@@ -349,6 +373,68 @@ mangle_debug_suffix_keep_quoted: {
             a._$stuff$XYZ_ = 3;
         }
     }
+}
+
+keep_substituted_property: {
+    options = {
+        evaluate: true,
+        properties: true,
+        reduce_vars: true,
+    }
+    mangle = {
+        properties: {
+            keep_quoted: true,
+        },
+    }
+    input: {
+        var o = { p: [] };
+        function f(b) {
+            return o[b];
+        }
+        function g() {
+            var a = "p";
+            return o[a] === f(a);
+        }
+        console.log(g() ? "PASS" : "FAIL");
+    }
+    expect: {
+        var o = { p: [] };
+        function f(n) {
+            return o[n];
+        }
+        function g() {
+            var n = "p";
+            return o.p === f(n);
+        }
+        console.log(g() ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+}
+
+keep_substituted_property_quotes: {
+    options = {
+        evaluate: true,
+        properties: true,
+        reduce_vars: true,
+    }
+    beautify = {
+        keep_quoted_props: true,
+    }
+    input: {
+        function f(o) {
+            var a = "p";
+            return o[a];
+        }
+        console.log(f({ p: "PASS" }));
+    }
+    expect: {
+        function f(o) {
+            var a = "p";
+            return o["p"];
+        }
+        console.log(f({ p: "PASS" }));
+    }
+    expect_stdout: "PASS"
 }
 
 first_256_chars_as_properties: {
@@ -897,12 +983,15 @@ issue_2256: {
         },
     }
     input: {
-        ({ "keep": 1 });
-        g.keep = g.change;
+        ({ "keep": 42 });
+        global.keep = global.change = "PASS";
+        console.log(keep);
     }
     expect: {
-        g.keep = g.g;
+        global.keep = global.l = "PASS";
+        console.log(keep);
     }
+    expect_stdout: "PASS"
 }
 
 lhs_prop_1: {
@@ -1508,5 +1597,233 @@ issue_5093_quote_style: {
         }[6 * 7]);
     }
     expect_exact: 'console.log({a:true,\'42\':"PASS","null":[]}[6*7]);'
+    expect_stdout: "PASS"
+}
+
+object_methods: {
+    options = {
+        properties: true,
+    }
+    input: {
+        ({
+            p() {
+                console.log("FAIL 1");
+            },
+            *q() {
+                console.log("FAIL 2");
+            },
+            async r() {
+                console.log("FAIL 3");
+            },
+            async *s() {
+                console.log("PASS");
+            },
+        }).s().next();
+    }
+    expect: {
+        [
+            () => {
+                console.log("FAIL 1");
+            },
+            function*() {
+                console.log("FAIL 2");
+            },
+            async () => {
+                console.log("FAIL 3");
+            },
+            async function*() {
+                console.log("PASS");
+            },
+        ][3]().next();
+    }
+    expect_stdout: "PASS"
+    node_version: ">=10"
+}
+
+issue_5177: {
+    options = {
+        properties: true,
+    }
+    input: {
+        var a = "FAIL";
+        var o = { a: "PASS" };
+        o.p = {
+            q() {
+                return this.a;
+            },
+        }.q;
+        console.log(o.p());
+    }
+    expect: {
+        var a = "FAIL";
+        var o = { a: "PASS" };
+        o.p = {
+            q() {
+                return this.a;
+            },
+        }.q;
+        console.log(o.p());
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+issue_5682_in_1: {
+    mangle = {
+        properties: true,
+    }
+    input: {
+        function f(a) {
+            return "foo" in a;
+        }
+        var o = {};
+        var p = "foo";
+        o[p] = 42;
+        console.log(f(o) ? "PASS" : "FAIL");
+    }
+    expect: {
+        function f(o) {
+            return "foo" in o;
+        }
+        var o = {};
+        var p = "foo";
+        o[p] = 42;
+        console.log(f(o) ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5682_in_2: {
+    mangle = {
+        properties: true,
+    }
+    input: {
+        function f(a) {
+            return "foo" in a;
+        }
+        var o = { foo: 42 };
+        console.log(f(o) ? "PASS" : "FAIL");
+    }
+    expect: {
+        function f(o) {
+            return "o" in o;
+        }
+        var o = { o: 42 };
+        console.log(f(o) ? "PASS" : "FAIL");
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5682_dot_1: {
+    mangle = {
+        properties: true,
+    }
+    input: {
+        function f(a) {
+            return a.foo;
+        }
+        var o = {};
+        var p = "foo";
+        o[p] = "PASS";
+        console.log(f(o));
+    }
+    expect: {
+        function f(o) {
+            return o.foo;
+        }
+        var o = {};
+        var p = "foo";
+        o[p] = "PASS";
+        console.log(f(o));
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5682_dot_2: {
+    mangle = {
+        properties: true,
+    }
+    input: {
+        function f(a) {
+            return a.foo;
+        }
+        var o = { foo: "PASS" };
+        console.log(f(o));
+    }
+    expect: {
+        function f(o) {
+            return o.o;
+        }
+        var o = { o: "PASS" };
+        console.log(f(o));
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5682_dot_2_computed: {
+    mangle = {
+        properties: true,
+    }
+    input: {
+        function f(a) {
+            return a.foo;
+        }
+        var o = { ["foo"]: "PASS" };
+        console.log(f(o));
+    }
+    expect: {
+        function f(o) {
+            return o.o;
+        }
+        var o = { ["o"]: "PASS" };
+        console.log(f(o));
+    }
+    expect_stdout: "PASS"
+    node_version: ">=4"
+}
+
+issue_5682_sub_1: {
+    mangle = {
+        properties: true,
+    }
+    input: {
+        function f(a) {
+            return a["foo"];
+        }
+        var o = {};
+        var p = "foo";
+        o[p] = "PASS";
+        console.log(f(o));
+    }
+    expect: {
+        function f(o) {
+            return o["foo"];
+        }
+        var o = {};
+        var p = "foo";
+        o[p] = "PASS";
+        console.log(f(o));
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5682_sub_2: {
+    mangle = {
+        properties: true,
+    }
+    input: {
+        function f(a) {
+            return a["foo"];
+        }
+        var o = { foo: "PASS" };
+        console.log(f(o));
+    }
+    expect: {
+        function f(o) {
+            return o["o"];
+        }
+        var o = { o: "PASS" };
+        console.log(f(o));
+    }
     expect_stdout: "PASS"
 }

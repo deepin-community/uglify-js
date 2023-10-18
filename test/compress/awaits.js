@@ -11,6 +11,21 @@ async_arrow: {
     node_version: ">=8"
 }
 
+async_computed: {
+    input: {
+        var o = {
+            async [42]() {
+                return this.p;
+            },
+            p: "PASS",
+        };
+        o[42]().then(console.log);
+    }
+    expect_exact: 'var o={async[42](){return this.p},p:"PASS"};o[42]().then(console.log);'
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
 async_label: {
     input: {
         (async function() {
@@ -182,6 +197,34 @@ dont_inline: {
     node_version: ">=8"
 }
 
+dont_inline_nested: {
+    options = {
+        inline: true,
+    }
+    input: {
+        function await() {
+            return "PASS";
+        }
+        (async function() {
+            (function() {
+                console.log(await("FAIL"));
+            })();
+        })();
+    }
+    expect: {
+        function await() {
+            return "PASS";
+        }
+        (async function() {
+            (function() {
+                console.log(await("FAIL"));
+            })();
+        })();
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
 inline_await_1: {
     options = {
         awaits: true,
@@ -340,7 +383,437 @@ inline_await_3_trim: {
     node_version: ">=8"
 }
 
-await_unary: {
+inline_await_this: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        var p = "FAIL";
+        ({
+            p: "PASS",
+            async f() {
+                return await (async () => this.p)();
+            },
+        }).f().then(console.log);
+    }
+    expect: {
+        var p = "FAIL";
+        ({
+            p: "PASS",
+            async f() {
+                return await this.p;
+            },
+        }).f().then(console.log);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+inline_block: {
+    options = {
+        awaits: true,
+        if_return: true,
+        inline: true,
+    }
+    input: {
+        console.log("foo");
+        (async function() {
+            console.log("bar");
+            (async function() {
+                for (var a of [ "baz" ])
+                    return a;
+            })();
+        })().then(console.log);
+        console.log("moo");
+    }
+    expect: {
+        console.log("foo");
+        (async function() {
+            console.log("bar");
+            for (var a of [ "baz" ])
+                return void await a;
+        })().then(console.log);
+        console.log("moo");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "moo",
+        "undefined",
+    ]
+    node_version: ">=8"
+}
+
+inline_block_async: {
+    options = {
+        awaits: true,
+        if_return: true,
+        inline: true,
+    }
+    input: {
+        console.log("foo");
+        (async function() {
+            console.log("bar");
+            (async function() {
+                for (var a of [ "baz" ])
+                    return {
+                        then(r) {
+                            console.log("moo");
+                            r(a);
+                        },
+                    };
+            })();
+        })().then(console.log);
+        console.log("moz");
+    }
+    expect: {
+        console.log("foo");
+        (async function() {
+            console.log("bar");
+            for (var a of [ "baz" ])
+                return void await {
+                    then(r) {
+                        console.log("moo");
+                        r(a);
+                    },
+                };
+        })().then(console.log);
+        console.log("moz");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "moz",
+        "moo",
+        "undefined",
+    ]
+    node_version: ">=8"
+}
+
+inline_block_await: {
+    options = {
+        awaits: true,
+        if_return: true,
+        inline: true,
+        side_effects: true,
+    }
+    input: {
+        console.log("foo");
+        (async function() {
+            console.log("bar");
+            await async function() {
+                for (var a of [ "baz" ])
+                    return a;
+            }();
+        })().then(console.log);
+        console.log("moo");
+    }
+    expect: {
+        console.log("foo");
+        (async function() {
+            console.log("bar");
+            for (var a of [ "baz" ])
+                return void await a;
+        })().then(console.log);
+        console.log("moo");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "moo",
+        "undefined",
+    ]
+    node_version: ">=8"
+}
+
+inline_block_await_async: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        (async function() {
+            console.log("foo");
+            await (async function() {
+                while (await console.log("bar"));
+                console.log("baz");
+            })();
+            console.log("moo");
+        })().then(console.log);
+        console.log("moz");
+    }
+    expect: {
+        (async function() {
+            console.log("foo");
+            while (await console.log("bar"));
+            console.log("baz");
+            await 0;
+            console.log("moo");
+        })().then(console.log);
+        console.log("moz");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "moz",
+        "baz",
+        "moo",
+        "undefined",
+    ]
+    node_version: ">=8"
+}
+
+inline_block_await_async_return: {
+    options = {
+        awaits: true,
+        if_return: true,
+        inline: true,
+        side_effects: true,
+    }
+    input: {
+        console.log("foo");
+        (async function() {
+            console.log("bar");
+            await async function() {
+                for (var a of [ "baz" ])
+                    return {
+                        then(r) {
+                            console.log("moo");
+                            r(a);
+                        },
+                    };
+            }();
+        })().then(console.log);
+        console.log("moz");
+    }
+    expect: {
+        console.log("foo");
+        (async function() {
+            console.log("bar");
+            for (var a of [ "baz" ])
+                return void await {
+                    then(r) {
+                        console.log("moo");
+                        r(a);
+                    },
+                };;
+        })().then(console.log);
+        console.log("moz");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "moz",
+        "moo",
+        "undefined",
+    ]
+    node_version: ">=8"
+}
+
+inline_block_return: {
+    options = {
+        awaits: true,
+        if_return: true,
+        inline: true,
+        passes: 2,
+        side_effects: true,
+    }
+    input: {
+        console.log("foo");
+        (async function() {
+            console.log("bar");
+            return async function() {
+                for (var a of [ "baz" ])
+                    return a;
+            }();
+        })().then(console.log);
+        console.log("moo");
+    }
+    expect: {
+        console.log("foo");
+        (async function() {
+            console.log("bar");
+            for (var a of [ "baz" ])
+                return a;
+        })().then(console.log);
+        console.log("moo");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "moo",
+        "baz",
+    ]
+    node_version: ">=8"
+}
+
+inline_block_return_async: {
+    options = {
+        awaits: true,
+        if_return: true,
+        inline: true,
+        passes: 2,
+        side_effects: true,
+    }
+    input: {
+        console.log("foo");
+        (async function() {
+            console.log("bar");
+            return async function() {
+                for (var a of [ "baz" ])
+                    return {
+                        then(r) {
+                            console.log("moo");
+                            r(a);
+                        },
+                    };
+            }();
+        })().then(console.log);
+        console.log("moz");
+    }
+    expect: {
+        console.log("foo");
+        (async function() {
+            console.log("bar");
+            for (var a of [ "baz" ])
+                return {
+                    then(r) {
+                        console.log("moo");
+                        r(a);
+                    },
+                };
+        })().then(console.log);
+        console.log("moz");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "moz",
+        "moo",
+        "baz",
+    ]
+    node_version: ">=8"
+}
+
+await_then: {
+    options = {
+        awaits: true,
+        side_effects: true,
+    }
+    input: {
+        var a = "PASS";
+        function f() {
+            return {
+                then: function(r) {
+                    a = "FAIL";
+                    r();
+                },
+            };
+        }
+        (async function() {
+            f(), await 42;
+            while (console.log(a));
+        })();
+    }
+    expect: {
+        var a = "PASS";
+        function f() {
+            return {
+                then: function(r) {
+                    a = "FAIL";
+                    r();
+                },
+            };
+        }
+        (async function() {
+            await !f();
+            while (console.log(a));
+        })();
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+await_unary_1: {
+    options = {
+        awaits: true,
+        side_effects: true,
+    }
+    input: {
+        var a = "PASS";
+        function f() {
+            return {
+                then: function(r) {
+                    a = "FAIL";
+                    r();
+                },
+            };
+        }
+        (async function() {
+            await !f();
+            while (console.log(a));
+        })();
+    }
+    expect: {
+        var a = "PASS";
+        function f() {
+            return {
+                then: function(r) {
+                    a = "FAIL";
+                    r();
+                },
+            };
+        }
+        (async function() {
+            await !f();
+            while (console.log(a));
+        })();
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+await_unary_2: {
+    options = {
+        awaits: true,
+        side_effects: true,
+    }
+    input: {
+        var a = "PASS";
+        function f() {
+            return {
+                then: function(r) {
+                    a = "FAIL";
+                    r();
+                },
+            };
+        }
+        (async function() {
+            await ~f();
+            while (console.log(a));
+        })();
+    }
+    expect: {
+        var a = "PASS";
+        function f() {
+            return {
+                then: function(r) {
+                    a = "FAIL";
+                    r();
+                },
+            };
+        }
+        (async function() {
+            await !f();
+            while (console.log(a));
+        })();
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+await_unary_3: {
     options = {
         awaits: true,
         side_effects: true,
@@ -367,7 +840,46 @@ await_unary: {
     node_version: ">=8"
 }
 
-await_void: {
+await_void_1: {
+    options = {
+        awaits: true,
+        side_effects: true,
+    }
+    input: {
+        var a = "PASS";
+        function f() {
+            return {
+                then: function(r) {
+                    a = "FAIL";
+                    r();
+                },
+            };
+        }
+        (async function() {
+            await void f();
+            while (console.log(a));
+        })();
+    }
+    expect: {
+        var a = "PASS";
+        function f() {
+            return {
+                then: function(r) {
+                    a = "FAIL";
+                    r();
+                },
+            };
+        }
+        (async function() {
+            await !f();
+            while (console.log(a));
+        })();
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+await_void_2: {
     options = {
         awaits: true,
         if_return: true,
@@ -382,7 +894,7 @@ await_void: {
     }
     expect: {
         (async function() {
-            await console.log("PASS");
+            console.log("PASS");
         })();
     }
     expect_stdout: "PASS"
@@ -453,7 +965,7 @@ object_function: {
         }).f();
     }
     expect: {
-        (async function() {
+        (async () => {
             console.log("PASS");
         })();
     }
@@ -530,6 +1042,60 @@ collapse_vars_3: {
             return "PASS";
         })();
         console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+collapse_funarg_1: {
+    options = {
+        collapse_vars: true,
+        unused: true,
+    }
+    input: {
+        A = "FAIL";
+        var a = "PASS";
+        (async function({}, b) {
+            return b;
+        })(null, A = a);
+        console.log(A);
+    }
+    expect: {
+        A = "FAIL";
+        var a = "PASS";
+        (async function({}, b) {
+            return b;
+        })(null, A = a);
+        console.log(A);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+collapse_funarg_2: {
+    options = {
+        collapse_vars: true,
+        unused: true,
+    }
+    input: {
+        A = "FAIL";
+        B = "PASS";
+        (async function() {
+            console.log(function({}, a) {
+                return a;
+            }(null, A = B));
+        })();
+        console.log(A);
+    }
+    expect: {
+        A = "FAIL";
+        B = "PASS";
+        (async function() {
+            console.log(function({}, a) {
+                return a;
+            }(null, A = B));
+        })();
+        console.log(A);
     }
     expect_stdout: "PASS"
     node_version: ">=8"
@@ -779,6 +1345,21 @@ functions_inner_var: {
         await();
     }
     expect_stdout: "undefined undefined"
+    node_version: ">=8"
+}
+
+instanceof_lambda: {
+    options = {
+        evaluate: true,
+        side_effects: true,
+    }
+    input: {
+        console.log(42 instanceof async function() {});
+    }
+    expect: {
+        console.log(false);
+    }
+    expect_stdout: "false"
     node_version: ">=8"
 }
 
@@ -1235,8 +1816,8 @@ issue_4454_2: {
         f("PASS");
     }
     expect: {
-        function f(b) {
-            (async function(c = console.log(b)) {})();
+        function f(a) {
+            (async function(c = console.log(a)) {})();
             var b = 42..toString();
             console.log(b);
         }
@@ -1916,80 +2497,6 @@ issue_5023_2: {
     node_version: ">=8"
 }
 
-issue_5032_normal: {
-    options = {
-        merge_vars: true,
-        webkit: false,
-    }
-    input: {
-        function log(value) {
-            console.log(value);
-            return value;
-        }
-        async function f(a) {
-            var b = log(a), c = b;
-            log(b);
-            log(c);
-        }
-        f("PASS");
-    }
-    expect: {
-        function log(value) {
-            console.log(value);
-            return value;
-        }
-        async function f(c) {
-            var b = log(c), c = b;
-            log(b);
-            log(c);
-        }
-        f("PASS");
-    }
-    expect_stdout: [
-        "PASS",
-        "PASS",
-        "PASS",
-    ]
-    node_version: ">=8"
-}
-
-issue_5032_webkit: {
-    options = {
-        merge_vars: true,
-        webkit: true,
-    }
-    input: {
-        function log(value) {
-            console.log(value);
-            return value;
-        }
-        async function f(a) {
-            var b = log(a), c = b;
-            log(b);
-            log(c);
-        }
-        f("PASS");
-    }
-    expect: {
-        function log(value) {
-            console.log(value);
-            return value;
-        }
-        async function f(a) {
-            var b = log(a), c = b;
-            log(b);
-            log(c);
-        }
-        f("PASS");
-    }
-    expect_stdout: [
-        "PASS",
-        "PASS",
-        "PASS",
-    ]
-    node_version: ">=8"
-}
-
 issue_5034: {
     options = {
         functions: true,
@@ -2208,6 +2715,885 @@ issue_5159_2: {
     }
     expect_stdout: [
         "baz",
+        "bar",
+    ]
+    node_version: ">=8"
+}
+
+issue_5177: {
+    options = {
+        properties: true,
+    }
+    input: {
+        (async function() {
+            return {
+                p(await) {},
+            }.p;
+        })().then(function(a) {
+            console.log(typeof a);
+        });
+    }
+    expect: {
+        (async function() {
+            return {
+                p(await) {},
+            }.p;
+        })().then(function(a) {
+            console.log(typeof a);
+        });
+    }
+    expect_stdout: "function"
+    node_version: ">=8"
+}
+
+issue_5250: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        (async function() {
+            await function() {
+                while (console.log("foo"));
+            }();
+            console.log("bar");
+        })();
+        console.log("baz");
+    }
+    expect: {
+        (async function() {
+            while (console.log("foo"));
+            await 0;
+            console.log("bar");
+        })();
+        console.log("baz");
+    }
+    expect_stdout: [
+        "foo",
+        "baz",
+        "bar",
+    ]
+    node_version: ">=8"
+}
+
+issue_5258_1: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        (async function() {
+            (async function() {
+                throw "FAIL";
+            })();
+            return "PASS";
+        })().catch(console.log).then(console.log);
+    }
+    expect: {
+        (async function() {
+            (async function() {
+                throw "FAIL";
+            })();
+            return "PASS";
+        })().catch(console.log).then(console.log);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+issue_5258_2: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        function f() {
+            throw "FAIL";
+        }
+        (async function() {
+            (async function() {
+                f();
+            })();
+            return "PASS";
+        })().catch(console.log).then(console.log);
+    }
+    expect: {
+        function f() {
+            throw "FAIL";
+        }
+        (async function() {
+            (async function() {
+                f();
+            })();
+            return "PASS";
+        })().catch(console.log).then(console.log);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+issue_5298: {
+    options = {
+        awaits: true,
+        side_effects: true,
+    }
+    input: {
+        var a = "PASS";
+        (async function() {
+            for (a in [ 42 in null ]);
+        })();
+        console.log(a);
+    }
+    expect: {
+        var a = "PASS";
+        (async function() {
+            for (a in [ 42 in null ]);
+        })();
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+issue_5305_1: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        var a = "PASS";
+        (async function() {
+            try {
+                return await function() {
+                    while (!console);
+                }();
+            } finally {
+                a = "FAIL";
+            }
+        })();
+        console.log(a);
+    }
+    expect: {
+        var a = "PASS";
+        (async function() {
+            try {
+                while (!console);
+                return await void 0;
+            } finally {
+                a = "FAIL";
+            }
+        })();
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+issue_5305_2: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        var a = "PASS";
+        (async function() {
+            try {
+                throw null;
+            } catch (e) {
+                return await function() {
+                    while (!console);
+                }();
+            } finally {
+                a = "FAIL";
+            }
+        })();
+        console.log(a);
+    }
+    expect: {
+        var a = "PASS";
+        (async function() {
+            try {
+                throw null;
+            } catch (e) {
+                while (!console);
+                return await void 0;
+            } finally {
+                a = "FAIL";
+            }
+        })();
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+issue_5305_3: {
+    options = {
+        awaits: true,
+        inline: true,
+        side_effects: true,
+    }
+    input: {
+        var a = "PASS";
+        (async function() {
+            try {
+                await function() {
+                    while (!console);
+                }();
+            } catch (e) {
+                a = "FAIL";
+            }
+        })();
+        console.log(a);
+    }
+    expect: {
+        var a = "PASS";
+        try {
+            while (!console);
+        } catch (e) {
+            a = "FAIL";
+        }
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+issue_5456: {
+    options = {
+        inline: true,
+        merge_vars: true,
+    }
+    input: {
+        var a = true;
+        (function() {
+            (function(b, c) {
+                var d = async function() {
+                    c = await null;
+                }();
+                var e = function() {
+                    if (c)
+                        console.log(typeof d);
+                    while (b);
+                }();
+            })(function(i) {
+                return console.log("foo") && i;
+            }(a));
+        })();
+    }
+    expect: {
+        var a = true;
+        (function() {
+            b = (i = a, console.log("foo") && i),
+            d = async function() {
+                c = await null;
+            }(),
+            e = function() {
+                if (c) console.log(typeof d);
+                while (b);
+            }(),
+            void 0;
+            var b, c, d, e;
+            var i;
+        })();
+    }
+    expect_stdout: "foo"
+    node_version: ">=8"
+}
+
+issue_5478: {
+    options = {
+        side_effects: true,
+    }
+    input: {
+        A = {
+            get then() {
+                a = "FAIL";
+            },
+        };
+        var a = "PASS";
+        (async function() {
+            for (var b in "foo")
+                return void A;
+        })();
+        console.log(a);
+    }
+    expect: {
+        A = {
+            get then() {
+                a = "FAIL";
+            },
+        };
+        var a = "PASS";
+        (async function() {
+            for (var b in "foo")
+                return !A;
+        })();
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+issue_5493: {
+    options = {
+        collapse_vars: true,
+        reduce_vars: true,
+    }
+    input: {
+        (async function(a) {
+            var b = await [ 42 || b, a = b ];
+            console.log(a);
+        })();
+    }
+    expect: {
+        (async function(a) {
+            var b = await [ 42 || b, a = b ];
+            console.log(a);
+        })();
+    }
+    expect_stdout: "undefined"
+    node_version: ">=8"
+}
+
+issue_5506: {
+    options = {
+        dead_code: true,
+    }
+    input: {
+        console.log(function(a) {
+            (async function() {
+                a = null in (a = "PASS");
+            })();
+            return a;
+        }("FAIL"));
+    }
+    expect: {
+        console.log(function(a) {
+            (async function() {
+                a = null in (a = "PASS");
+            })();
+            return a;
+        }("FAIL"));
+    }
+    expect_stdout: "PASS"
+    node_version: ">=8"
+}
+
+issue_5528_1: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        (async function() {
+            await function() {
+                try {
+                    return;
+                } finally {
+                    console.log("foo");
+                }
+            }();
+        })();
+        console.log("bar");
+    }
+    expect: {
+        (async function() {
+            await function() {
+                try {
+                    return;
+                } finally {
+                    console.log("foo");
+                }
+            }();
+        })();
+        console.log("bar");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+    ]
+    node_version: ">=8"
+}
+
+issue_5528_2: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        (async function() {
+            await function() {
+                try {
+                    return 42;
+                } finally {
+                    console.log("foo");
+                }
+            }();
+        })();
+        console.log("bar");
+    }
+    expect: {
+        (async function() {
+            await function() {
+                try {
+                    return 42;
+                } finally {
+                    console.log("foo");
+                }
+            }();
+        })();
+        console.log("bar");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+    ]
+    node_version: ">=8"
+}
+
+issue_5528_3: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        (async function() {
+            await function() {
+                try {
+                    FAIL;
+                } catch (e) {
+                    return console.log("foo");
+                } finally {
+                    console.log("bar");
+                }
+            }();
+        })();
+        console.log("baz");
+    }
+    expect: {
+        (async function() {
+            await function() {
+                try {
+                    FAIL;
+                } catch (e) {
+                    return console.log("foo");
+                } finally {
+                    console.log("bar");
+                }
+            }();
+        })();
+        console.log("baz");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "baz",
+    ]
+    node_version: ">=8"
+}
+
+issue_5528_4: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        (async function() {
+            await function() {
+                try {
+                    return {
+                        then() {
+                            console.log("foo");
+                        },
+                    };
+                } finally {
+                    console.log("bar");
+                }
+            }();
+        })();
+        console.log("baz");
+    }
+    expect: {
+        (async function() {
+            await function() {
+                try {
+                    return {
+                        then() {
+                            console.log("foo");
+                        },
+                    };
+                } finally {
+                    console.log("bar");
+                }
+            }();
+        })();
+        console.log("baz");
+    }
+    expect_stdout: [
+        "bar",
+        "baz",
+        "foo",
+    ]
+    node_version: ">=8"
+}
+
+issue_5634_1: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        var a = "foo";
+        (async function() {
+            (async function() {
+                try {
+                    return {
+                        then(resolve) {
+                            console.log("bar");
+                            resolve();
+                            console.log("baz");
+                        },
+                    };
+                } finally {
+                    a = "moo";
+                }
+            })();
+        })();
+        console.log(a);
+    }
+    expect: {
+        var a = "foo";
+        (async function() {
+            (async function() {
+                try {
+                    return {
+                        then(resolve) {
+                            console.log("bar");
+                            resolve();
+                            console.log("baz");
+                        },
+                    };
+                } finally {
+                    a = "moo";
+                }
+            })();
+        })();
+        console.log(a);
+    }
+    expect_stdout: [
+        "moo",
+        "bar",
+        "baz",
+    ]
+    node_version: ">=8"
+}
+
+issue_5634_1_side_effects: {
+    options = {
+        awaits: true,
+        inline: true,
+        side_effects: true,
+    }
+    input: {
+        var a = "foo";
+        (async function() {
+            (async function() {
+                try {
+                    return {
+                        then(resolve) {
+                            console.log("bar");
+                            resolve();
+                            console.log("baz");
+                        },
+                    };
+                } finally {
+                    a = "moo";
+                }
+            })();
+        })();
+        console.log(a);
+    }
+    expect: {
+        var a = "foo";
+        (async function() {
+            try {
+                return {
+                    then(resolve) {
+                        console.log("bar");
+                        resolve();
+                        console.log("baz");
+                    },
+                };
+            } finally {
+                a = "moo";
+            }
+        })();
+        console.log(a);
+    }
+    expect_stdout: [
+        "moo",
+        "bar",
+        "baz",
+    ]
+    node_version: ">=8"
+}
+
+issue_5634_2: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        var a = "foo";
+        (async function() {
+            await async function() {
+                try {
+                    return {
+                        then(resolve) {
+                            console.log("bar");
+                            resolve();
+                            console.log("baz");
+                        },
+                    };
+                } finally {
+                    a = "moo";
+                }
+            }();
+        })();
+        console.log(a);
+    }
+    expect: {
+        var a = "foo";
+        (async function() {
+            await async function() {
+                try {
+                    return {
+                        then(resolve) {
+                            console.log("bar");
+                            resolve();
+                            console.log("baz");
+                        },
+                    };
+                } finally {
+                    a = "moo";
+                }
+            }();
+        })();
+        console.log(a);
+    }
+    expect_stdout: [
+        "moo",
+        "bar",
+        "baz",
+    ]
+    node_version: ">=8"
+}
+
+issue_5634_2_side_effects: {
+    options = {
+        awaits: true,
+        inline: true,
+        side_effects: true,
+    }
+    input: {
+        var a = "foo";
+        (async function() {
+            await async function() {
+                try {
+                    return {
+                        then(resolve) {
+                            console.log("bar");
+                            resolve();
+                            console.log("baz");
+                        },
+                    };
+                } finally {
+                    a = "moo";
+                }
+            }();
+        })();
+        console.log(a);
+    }
+    expect: {
+        var a = "foo";
+        (async function() {
+            try {
+                return {
+                    then(resolve) {
+                        console.log("bar");
+                        resolve();
+                        console.log("baz");
+                    },
+                };
+            } finally {
+                a = "moo";
+            }
+        })();
+        console.log(a);
+    }
+    expect_stdout: [
+        "moo",
+        "bar",
+        "baz",
+    ]
+    node_version: ">=8"
+}
+
+issue_5634_3: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        var a = "foo";
+        (async function() {
+            return async function() {
+                try {
+                    return {
+                        then(resolve) {
+                            console.log("bar");
+                            resolve();
+                            console.log("baz");
+                        },
+                    };
+                } finally {
+                    a = "moo";
+                }
+            }();
+        })();
+        console.log(a);
+    }
+    expect: {
+        var a = "foo";
+        (async function() {
+            return async function() {
+                try {
+                    return {
+                        then(resolve) {
+                            console.log("bar");
+                            resolve();
+                            console.log("baz");
+                        },
+                    };
+                } finally {
+                    a = "moo";
+                }
+            }();
+        })();
+        console.log(a);
+    }
+    expect_stdout: [
+        "moo",
+        "bar",
+        "baz",
+    ]
+    node_version: ">=8"
+}
+
+issue_5634_3_side_effects: {
+    options = {
+        awaits: true,
+        inline: true,
+        side_effects: true,
+    }
+    input: {
+        var a = "foo";
+        (async function() {
+            return async function() {
+                try {
+                    return {
+                        then(resolve) {
+                            console.log("bar");
+                            resolve();
+                            console.log("baz");
+                        },
+                    };
+                } finally {
+                    a = "moo";
+                }
+            }();
+        })();
+        console.log(a);
+    }
+    expect: {
+        var a = "foo";
+        (async function() {
+            try {
+                return {
+                    then(resolve) {
+                        console.log("bar");
+                        resolve();
+                        console.log("baz");
+                    },
+                };
+            } finally {
+                a = "moo";
+            }
+        })();
+        console.log(a);
+    }
+    expect_stdout: [
+        "moo",
+        "bar",
+        "baz",
+    ]
+    node_version: ">=8"
+}
+
+issue_5692_1: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        (async function() {
+            (async function() {
+                for await (var k of []);
+            })();
+            console.log("foo");
+        })();
+        console.log("bar");
+    }
+    expect: {
+        (async function() {
+            (async function() {
+                for await (var k of []);
+            })();
+            console.log("foo");
+        })();
+        console.log("bar");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+    ]
+    node_version: ">=10"
+}
+
+issue_5692_2: {
+    options = {
+        awaits: true,
+        inline: true,
+    }
+    input: {
+        (async function() {
+            (async function() {
+                for (var k of []);
+            })();
+            console.log("foo");
+        })();
+        console.log("bar");
+    }
+    expect: {
+        (async function() {
+            for (var k of []);
+            console.log("foo");
+        })();
+        console.log("bar");
+    }
+    expect_stdout: [
+        "foo",
         "bar",
     ]
     node_version: ">=8"

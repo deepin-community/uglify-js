@@ -13,10 +13,10 @@ reduce_merge_const: {
         console.log(b);
     }
     expect: {
-        var b = console;
-        console.log(typeof b);
-        b = typeof b;
-        console.log(b);
+        var a = console;
+        console.log(typeof a);
+        a = typeof a;
+        console.log(a);
     }
     expect_stdout: [
         "object",
@@ -41,10 +41,10 @@ reduce_merge_let: {
     }
     expect: {
         "use strict";
-        var b = console;
-        console.log(typeof b);
-        b = typeof b;
-        console.log(b);
+        var a = console;
+        console.log(typeof a);
+        a = typeof a;
+        console.log(a);
     }
     expect_stdout: [
         "object",
@@ -111,7 +111,7 @@ hoist_props_const: {
         }
     }
     expect: {
-        var o_p = "PASS";
+        var o, o_p = "PASS";
         console.log(o_p);
     }
     expect_stdout: "PASS"
@@ -136,7 +136,7 @@ hoist_props_let: {
     }
     expect: {
         "use strict";
-        var o_p = "PASS";
+        var o, o_p = "PASS";
         console.log(o_p);
     }
     expect_stdout: "PASS"
@@ -191,6 +191,43 @@ scope_adjustment_let: {
             console.log(void (k && 0));
     }
     expect_stdout: "undefined"
+    node_version: ">=4"
+}
+
+escaped_const: {
+    options = {
+        reduce_vars: true,
+        toplevel: true,
+        varify: true,
+    }
+    input: {
+        const log = console.log;
+        log("PASS");
+    }
+    expect: {
+        var log = console.log;
+        log("PASS");
+    }
+    expect_stdout: "PASS"
+}
+
+escaped_let: {
+    options = {
+        reduce_vars: true,
+        toplevel: true,
+        varify: true,
+    }
+    input: {
+        "use strict";
+        let log = console.log;
+        log("PASS");
+    }
+    expect: {
+        "use strict";
+        var log = console.log;
+        log("PASS");
+    }
+    expect_stdout: "PASS"
     node_version: ">=4"
 }
 
@@ -610,6 +647,200 @@ issue_4954: {
     expect_stdout: [
         "object",
         "function",
+    ]
+    node_version: ">=4"
+}
+
+issue_5516: {
+    options = {
+        reduce_funcs: true,
+        reduce_vars: true,
+        unused: true,
+        varify: true,
+    }
+    input: {
+        "use strict";
+        console.log(typeof function() {
+            {
+                let a;
+            }
+            {
+                const a = function() {};
+                return a;
+            }
+        }());
+    }
+    expect: {
+        "use strict";
+        console.log(typeof function() {
+            {
+                const a = function() {};
+                return a;
+            }
+        }());
+    }
+    expect_stdout: "function"
+    node_version: ">=4"
+}
+
+issue_5697_1: {
+    options = {
+        if_return: true,
+        inline: true,
+        reduce_vars: true,
+        unused: true,
+        varify: true,
+    }
+    input: {
+        console.log(function() {
+            f();
+            return typeof a;
+            function f() {
+                (function() {
+                    for (var k in { foo: 42 }) {
+                        const a = k;
+                        console.log(a);
+                    }
+                })();
+            }
+        }());
+    }
+    expect: {
+        console.log(function() {
+            (function() {
+                for (var k in { foo: 42 }) {
+                    var a = k;
+                    console.log(a);
+                }
+            })();
+            return typeof a;
+        }());
+    }
+    expect_stdout: [
+        "foo",
+        "undefined",
+    ]
+}
+
+issue_5697_2: {
+    options = {
+        if_return: true,
+        inline: true,
+        reduce_vars: true,
+        unused: true,
+        varify: true,
+    }
+    input: {
+        "use strict";
+        console.log(function() {
+            f();
+            return typeof a;
+            function f() {
+                (function() {
+                    for (var k in { foo: 42 }) {
+                        let a = k;
+                        console.log(a);
+                    }
+                })();
+            }
+        }());
+    }
+    expect: {
+        "use strict";
+        console.log(function() {
+            (function() {
+                for (var k in { foo: 42 }) {
+                    var a = k;
+                    console.log(a);
+                }
+            })();
+            return typeof a;
+        }());
+    }
+    expect_stdout: [
+        "foo",
+        "undefined",
+    ]
+    node_version: ">=4"
+}
+
+issue_5697_3: {
+    options = {
+        inline: true,
+        reduce_vars: true,
+        side_effects: true,
+        unused: true,
+        varify: true,
+    }
+    input: {
+        console.log(function() {
+            f();
+            return typeof a;
+            function f() {
+                (function() {
+                    for (var k in { foo: 42 }) {
+                        const a = k;
+                        console.log(a);
+                    }
+                })();
+            }
+        }());
+    }
+    expect: {
+        console.log(function() {
+            (function() {
+                for (var k in { foo: 42 }) {
+                    var a = k;
+                    console.log(a);
+                }
+            })();
+            return typeof a;
+        }());
+    }
+    expect_stdout: [
+        "foo",
+        "undefined",
+    ]
+}
+
+issue_5697_4: {
+    options = {
+        inline: true,
+        reduce_vars: true,
+        side_effects: true,
+        unused: true,
+        varify: true,
+    }
+    input: {
+        "use strict";
+        console.log(function() {
+            f();
+            return typeof a;
+            function f() {
+                (function() {
+                    for (var k in { foo: 42 }) {
+                        let a = k;
+                        console.log(a);
+                    }
+                })();
+            }
+        }());
+    }
+    expect: {
+        "use strict";
+        console.log(function() {
+            (function() {
+                for (var k in { foo: 42 }) {
+                    var a = k;
+                    console.log(a);
+                }
+            })();
+            return typeof a;
+        }());
+    }
+    expect_stdout: [
+        "foo",
+        "undefined",
     ]
     node_version: ">=4"
 }

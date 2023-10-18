@@ -111,6 +111,7 @@ labels_5: {
 labels_6: {
     options = {
         dead_code: true,
+        unused: true,
     }
     input: {
         out: break out;
@@ -206,6 +207,59 @@ labels_10: {
         }
     }
     expect_stdout: "PASS"
+}
+
+labels_11: {
+    options = {
+        conditionals: true,
+        if_return: true,
+        unused: true,
+    }
+    input: {
+        L: if (console.log("PASS"))
+            break L;
+    }
+    expect: {
+        console.log("PASS");
+    }
+    expect_stdout: "PASS"
+}
+
+labels_12: {
+    options = {
+        conditionals: true,
+        dead_code: true,
+        if_return: true,
+    }
+    input: {
+        L: try {
+            if (console.log("foo"))
+                break L;
+            throw "bar";
+        } catch (e) {
+            console.log(e);
+            break L;
+        } finally {
+            if (console.log("baz"))
+                break L;
+        }
+    }
+    expect: {
+        L: try {
+            if (!console.log("foo"))
+                throw "bar";
+        } catch (e) {
+            console.log(e);
+        } finally {
+            if (console.log("baz"))
+                break L;
+        }
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+        "baz",
+    ]
 }
 
 issue_4466_1: {
@@ -324,6 +378,56 @@ issue_4466_2_toplevel_v8: {
             e:;
         else
             e:;
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5522: {
+    options = {
+        dead_code: true,
+    }
+    input: {
+        console.log(function() {
+            L: try {
+                return "FAIL";
+            } finally {
+                break L;
+            }
+            return "PASS";
+        }());
+    }
+    expect: {
+        console.log(function() {
+            L: try {
+                return "FAIL";
+            } finally {
+                break L;
+            }
+            return "PASS";
+        }());
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5524: {
+    options = {
+        dead_code: true,
+    }
+    input: {
+        L: try {
+            FAIL;
+        } finally {
+            break L;
+        }
+        console.log("PASS");
+    }
+    expect: {
+        L: try {
+            FAIL;
+        } finally {
+            break L;
+        }
+        console.log("PASS");
     }
     expect_stdout: "PASS"
 }

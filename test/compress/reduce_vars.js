@@ -6,6 +6,7 @@ reduce_vars: {
             C: 0,
         },
         inline: true,
+        passes: 2,
         reduce_funcs: true,
         reduce_vars: true,
         toplevel: true,
@@ -41,10 +42,8 @@ reduce_vars: {
     }
     expect: {
         var A = 1;
-        (function() {
-            console.log(-3);
-            console.log(A - 5);
-        })();
+        console.log(-3);
+        console.log(A - 5);
         (function f1() {
             var a = 2;
             console.log(a - 5);
@@ -905,7 +904,7 @@ use_before_var: {
     }
     expect: {
         function f(){
-            console.log(void 0);
+            console.log(t);
             var t = 1;
         }
     }
@@ -981,7 +980,7 @@ inner_var_for_1: {
     expect: {
         function f() {
             var a = 1;
-            x(1, void 0, d);
+            x(1, b, d);
             for (var b = 2, c = 3; x(1, 2, 3, d); x(1, 2, 3, d)) {
                 var d = 4, e = 5;
                 x(1, 2, 3, d, e);
@@ -2489,7 +2488,7 @@ side_effects_assign: {
         console.log(a);
     }
     expect: {
-        var a = typeof void (a && a.in);
+        var a = "undefined";
         console.log(a);
     }
     expect_stdout: "undefined"
@@ -2531,7 +2530,8 @@ pure_getters_2: {
         var a = a && a.b;
     }
     expect: {
-        var a = a && a.b;
+        var a;
+        a && a.b;
     }
 }
 
@@ -5425,7 +5425,7 @@ issue_2774: {
             get a() {
                 var b;
                 (b = true) && b.c;
-                b = void 0;
+                void 0;
             }
         }.a);
     }
@@ -6671,6 +6671,7 @@ issues_3267_1: {
         dead_code: true,
         evaluate: true,
         inline: true,
+        negate_iife: true,
         reduce_vars: true,
         sequences: true,
         side_effects: true,
@@ -6688,7 +6689,7 @@ issues_3267_1: {
         });
     }
     expect: {
-        !function(i) {
+        !function(x) {
             if (Object())
                 return console.log("PASS");
             throw "FAIL";
@@ -6705,6 +6706,7 @@ issues_3267_2: {
         evaluate: true,
         inline: true,
         keep_fargs: false,
+        negate_iife: true,
         passes: 2,
         reduce_vars: true,
         sequences: true,
@@ -7320,6 +7322,64 @@ local_assignment_loop: {
     expect_stdout: "PASS"
 }
 
+local_assignment_modified: {
+    options = {
+        evaluate: true,
+        reduce_vars: true,
+        side_effects: true,
+        toplevel: true,
+    }
+    input: {
+        var a;
+        (a = a || {}).p = 42;
+        console.log(a.p);
+    }
+    expect: {
+        var a;
+        (a = {}).p = 42;
+        console.log(a.p);
+    }
+    expect_stdout: "42"
+}
+
+local_declaration: {
+    options = {
+        evaluate: true,
+        reduce_vars: true,
+        side_effects: true,
+        toplevel: true,
+    }
+    input: {
+        var a;
+        a || console.log(a = "PASS");
+    }
+    expect: {
+        var a;
+        console.log("PASS");
+    }
+    expect_stdout: "PASS"
+}
+
+local_definition_modified: {
+    options = {
+        evaluate: true,
+        reduce_vars: true,
+        side_effects: true,
+        toplevel: true,
+    }
+    input: {
+        var a = a || {};
+        a.p = 42;
+        console.log(a.p);
+    }
+    expect: {
+        var a = {};
+        a.p = 42;
+        console.log(a.p);
+    }
+    expect_stdout: "42"
+}
+
 issue_3957_1: {
     options = {
         evaluate: true,
@@ -7435,6 +7495,7 @@ issue_4030: {
         collapse_vars: true,
         evaluate: true,
         reduce_vars: true,
+        side_effects: true,
         toplevel: true,
         unused: true,
     }
@@ -7771,4 +7832,233 @@ issue_5055_2: {
         f(0 && (a = 0)(f()));
     }
     expect_stdout: "PASS"
+}
+
+issue_5324: {
+    options = {
+        inline: true,
+        merge_vars: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        A = 0;
+        do {
+            var a, b = A;
+            for (a in b)
+                var c = b;
+        } while (function() {
+            var d;
+            console.log(d *= A);
+        }());
+    }
+    expect: {
+        A = 0;
+        do {
+            var a, b = A;
+            for (a in b);
+        } while (b = void 0, void console.log(b *= A));
+    }
+    expect_stdout: "NaN"
+}
+
+issue_5434: {
+    options = {
+        evaluate: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        console.log(function(a) {
+            for (var i = 0; i < 2; i++) {
+                var b = "FAIL";
+                f && f();
+                a = b;
+                var f = function() {
+                    b = "PASS";
+                };
+            }
+            return a;
+        }());
+    }
+    expect: {
+        console.log(function(a) {
+            for (var i = 0; i < 2; i++) {
+                var b = "FAIL";
+                f && f();
+                a = b;
+                var f = function() {
+                    b = "PASS";
+                };
+            }
+            return a;
+        }());
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5623: {
+    options = {
+        collapse_vars: true,
+        evaluate: true,
+        passes: 2,
+        reduce_vars: true,
+        side_effects: true,
+        toplevel: true,
+    }
+    input: {
+        var a = 0;
+        function f() {
+            var b = a;
+            a = b;
+        }
+        f && f((a++ && a).toString());
+        console.log(a);
+    }
+    expect: {
+        var a = 0;
+        function f() {
+            var b;
+            a = a;
+        }
+        f((a++ && a).toString());
+        console.log(a);
+    }
+    expect_stdout: "1"
+}
+
+issue_5716_1: {
+    options = {
+        collapse_vars: true,
+        inline: true,
+        merge_vars: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a;
+        function f() {
+            var b = [ c, c ], c = function() {
+                return b++ + (a = b);
+            }();
+        }
+        f();
+        console.log(a);
+    }
+    expect: {
+        c = [ c, c ],
+        void (c = ++c);
+        var c;
+        console.log(c);
+    }
+    expect_stdout: "NaN"
+}
+
+issue_5716_2: {
+    options = {
+        collapse_vars: true,
+        inline: true,
+        merge_vars: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a;
+        function f() {
+            var b = [ c, c ], c = function() {
+                return (b += 4) + (a = b += 2);
+            }();
+        }
+        f();
+        console.log(a);
+    }
+    expect: {
+        void (c = c = (c = [ c, c ]) + 4 + 2);
+        var c;
+        console.log(c);
+    }
+    expect_stdout: ",42"
+}
+
+issue_5716_3: {
+    options = {
+        assignments: true,
+        collapse_vars: true,
+        inline: true,
+        merge_vars: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a;
+        function f() {
+            var b = [ c, c ], c = function() {
+                return (b = b + 4) + (a = b += 2);
+            }();
+        }
+        f();
+        console.log(a);
+    }
+    expect: {
+        void (c = c = (c = [ c, c ]) + 4 + 2);
+        var c;
+        console.log(c);
+    }
+    expect_stdout: ",42"
+}
+
+issue_5716_4: {
+    options = {
+        assignments: true,
+        collapse_vars: true,
+        inline: true,
+        merge_vars: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a;
+        function f() {
+            var b = [ c, c ], c = function() {
+                return (b = true | b) + (a = b *= 42);
+            }();
+        }
+        f();
+        console.log(a);
+    }
+    expect: {
+        void (c = c = ((c = [ c, c ]) | true) * 42);
+        var c;
+        console.log(c);
+    }
+    expect_stdout: "42"
+}
+
+issue_5716_5: {
+    options = {
+        assignments: true,
+        reduce_vars: true,
+    }
+    input: {
+        console.log(function() {
+            return 0 || (a = 42 | a);
+            var a = function() {
+                return a;
+            };
+        }());
+    }
+    expect: {
+        console.log(function() {
+            return 0 || (a |= 42);
+            var a = function() {
+                return a;
+            };
+        }());
+    }
+    expect_stdout: "42"
 }

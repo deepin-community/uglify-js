@@ -745,7 +745,7 @@ call_args: {
     expect: {
         var a = 1;
         console.log(1);
-        +(1, 1);
+        1, 1;
     }
     expect_stdout: true
 }
@@ -769,7 +769,7 @@ call_args_drop_param: {
     }
     expect: {
         console.log(1);
-        +(b, 1);
+        b, 1;
     }
     expect_stdout: true
 }
@@ -886,6 +886,39 @@ unsafe_charAt_noop: {
         );
     }
     expect_stdout: "f  n"
+}
+
+chained_side_effects: {
+    options = {
+        evaluate: true,
+    }
+    input: {
+        console.log("foo") || (console.log("bar"), "baz") || console.log("moo");
+    }
+    expect: {
+        console.log("foo") || (console.log("bar"), "baz");
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+    ]
+    expect_warnings: [
+        "WARN: Condition left of || always true [test/compress/evaluate.js:1,8]",
+    ]
+}
+
+instanceof_lambda: {
+    options = {
+        evaluate: true,
+        side_effects: true,
+    }
+    input: {
+        console.log(42 instanceof function() {});
+    }
+    expect: {
+        console.log(false);
+    }
+    expect_stdout: "false"
 }
 
 issue_1649: {
@@ -2752,8 +2785,7 @@ issue_3944: {
     }
     expect: {
         void function f() {
-            while (a = 0 == (a = void 0), console.log(a), void 0);
-            var a;
+            while (0 == void 0, console.log(false), void 0);
             f;
         }();
     }
@@ -3203,7 +3235,7 @@ issue_4552: {
     expect_stdout: "NaN"
 }
 
-issue_4886: {
+issue_4886_1: {
     options = {
         evaluate: true,
         unsafe: true,
@@ -3221,4 +3253,166 @@ issue_4886: {
         });
     }
     expect_stdout: "true"
+}
+
+issue_4886_2: {
+    options = {
+        evaluate: true,
+        unsafe: true,
+    }
+    input: {
+        console.log("foo" in {
+            "foo": null,
+            __proto__: 42,
+        });
+    }
+    expect: {
+        console.log("foo" in {
+            "foo": null,
+            __proto__: 42,
+        });
+    }
+    expect_stdout: "true"
+}
+
+issue_5354: {
+    options = {
+        evaluate: true,
+        unsafe: true,
+    }
+    input: {
+        function f(a) {
+            return +a.toExponential(1);
+        }
+        function g(b) {
+            return 0 + b.toFixed(2);
+        }
+        function h(c) {
+            return 1 * c.toPrecision(3);
+        }
+        console.log(typeof f(45), typeof g(67), typeof h(89));
+    }
+    expect: {
+        function f(a) {
+            return +a.toExponential(1);
+        }
+        function g(b) {
+            return 0 + b.toFixed(2);
+        }
+        function h(c) {
+            return +c.toPrecision(3);
+        }
+        console.log(typeof f(45), typeof g(67), typeof h(89));
+    }
+    expect_stdout: "number string number"
+}
+
+issue_5356: {
+    options = {
+        evaluate: true,
+        inline: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        console.log(function() {
+            return a++;
+            var a = a;
+        }());
+    }
+    expect: {
+        console.log(+a);
+        var a;
+    }
+    expect_stdout: "NaN"
+}
+
+issue_5362_1: {
+    options = {
+        evaluate: true,
+        reduce_vars: true,
+        toplevel: true,
+    }
+    input: {
+        var a = -console;
+        console.log(delete +a);
+    }
+    expect: {
+        var a = -console;
+        console.log((+a, true));
+    }
+    expect_stdout: "true"
+}
+
+issue_5362_2: {
+    options = {
+        evaluate: true,
+        reduce_vars: true,
+        side_effects: true,
+        toplevel: true,
+        unsafe: true,
+        unused: true,
+    }
+    input: {
+        var a = -console;
+        console.log(delete +a);
+    }
+    expect: {
+        console.log(true);
+    }
+    expect_stdout: "true"
+}
+
+issue_5380: {
+    options = {
+        evaluate: true,
+        keep_fnames: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a = function f(b) {
+            return function g() {
+                for (b in { PASS: 42 });
+            }(), b;
+        }("FAIL");
+        console.log(a);
+    }
+    expect: {
+        var a = function f(b) {
+            return function g() {
+                for (b in { PASS: 42 });
+            }(), b;
+        }("FAIL");
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5558: {
+    options = {
+        collapse_vars: true,
+        evaluate: true,
+        reduce_vars: true,
+        sequences: true,
+        toplevel: true,
+    }
+    input: {
+        var a = 99, b = 0;
+        a++;
+        b++;
+        b += a;
+        b *= a;
+        b += a;
+        console.log(a);
+    }
+    expect: {
+        var a = 99, b = 0;
+        b++,
+        b = (b += ++a) * a + a,
+        console.log(a);
+    }
+    expect_stdout: "100"
 }

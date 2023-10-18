@@ -2,6 +2,7 @@ var assert = require("assert");
 var exec = require("child_process").exec;
 var fs = require("fs");
 var run_code = require("../sandbox").run_code;
+var semver = require("semver");
 var to_ascii = require("../node").to_ascii;
 
 function read(path) {
@@ -12,10 +13,13 @@ describe("bin/uglifyjs", function() {
     var uglifyjscmd = '"' + process.argv[0] + '" bin/uglifyjs';
     it("Should produce a functional build when using --self", function(done) {
         this.timeout(30000);
-        var command = uglifyjscmd + ' --self -cm --wrap WrappedUglifyJS';
-        exec(command, {
-            maxBuffer: 1048576
-        }, function(err, stdout) {
+        var command = [
+            uglifyjscmd,
+            "--self",
+            semver.satisfies(process.version, "<=0.12") ? "-mc hoist_funs" : "-mc",
+            "--wrap WrappedUglifyJS",
+        ].join(" ");
+        exec(command, { maxBuffer: 1048576 }, function(err, stdout) {
             if (err) throw err;
             eval(stdout);
             assert.strictEqual(typeof WrappedUglifyJS, "object");
@@ -49,6 +53,23 @@ describe("bin/uglifyjs", function() {
             done();
         });
     });
+    it("Should work with --expression", function(done) {
+        exec([
+            uglifyjscmd,
+            "--expression",
+            "--compress",
+            "--mangle",
+        ].join(" "), function(err, stdout) {
+            if (err) throw err;
+            assert.strictEqual(stdout, "function(n){for(;n(););return 42}(A)\n");
+            done();
+        }).stdin.end([
+            "function(x) {",
+            "    while (x()) {}",
+            "    return 42;",
+            "}(A)",
+        ].join("\n"));
+    });
     it("Should work with --source-map names=true", function(done) {
         exec([
             uglifyjscmd,
@@ -65,7 +86,7 @@ describe("bin/uglifyjs", function() {
                 "    q: b",
                 "};",
                 "//# sourceMappingURL=data:application/json;charset=utf-8;base64,",
-            ].join("\n")
+            ].join("\n");
             assert.strictEqual(stdout.slice(0, expected.length), expected);
             var map = JSON.parse(to_ascii(stdout.slice(expected.length).trim()));
             assert.deepEqual(map.names, [ "obj", "p", "a", "q", "b" ]);
@@ -93,7 +114,7 @@ describe("bin/uglifyjs", function() {
                 "    q: b",
                 "};",
                 "//# sourceMappingURL=data:application/json;charset=utf-8;base64,",
-            ].join("\n")
+            ].join("\n");
             assert.strictEqual(stdout.slice(0, expected.length), expected);
             var map = JSON.parse(to_ascii(stdout.slice(expected.length).trim()));
             assert.deepEqual(map.names, []);
@@ -122,7 +143,7 @@ describe("bin/uglifyjs", function() {
             if (err) throw err;
             assert.strictEqual(stdout, [
                 "var bar=function(){function foo(bar){return bar}return foo}();",
-                "//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInRlc3QvaW5wdXQvaXNzdWUtMTMyMy9zYW1wbGUuanMiXSwibmFtZXMiOlsiYmFyIiwiZm9vIl0sIm1hcHBpbmdzIjoiQUFBQSxJQUFJQSxJQUFNLFdBQ04sU0FBU0MsSUFBS0QsS0FDVixPQUFPQSxJQUdYLE9BQU9DLElBTEQifQ==",
+                "//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInRlc3QvaW5wdXQvaXNzdWUtMTMyMy9zYW1wbGUuanMiXSwibmFtZXMiOlsiYmFyIiwiZm9vIl0sIm1hcHBpbmdzIjoiQUFBQSxJQUFJQSxJQUFNLFdBQ04sU0FBU0MsSUFBS0QsS0FDVixPQUFPQSxHQUNYLENBRUEsT0FBT0MsR0FDVixFQUFFIn0=",
                 "",
             ].join("\n"));
             done();
@@ -184,6 +205,30 @@ describe("bin/uglifyjs", function() {
             child.stdin.end(read("test/input/issue-3040/input.js"));
         }, 1000);
     });
+    it("Should work with --keep-fargs (mangle only)", function(done) {
+        var command = uglifyjscmd + ' test/input/issue-1431/sample.js --keep-fargs -m';
+        exec(command, function(err, stdout) {
+            if (err) throw err;
+            assert.strictEqual(stdout, "function f(x){return function(){function n(a){return a*a}return x(n)}}function g(op){return op(1)+op(2)}console.log(f(g)()==5);\n");
+            done();
+        });
+    });
+    it("Should work with --keep-fargs (mangle & compress)", function(done) {
+        var command = uglifyjscmd + ' test/input/issue-1431/sample.js --keep-fargs -m -c';
+        exec(command, function(err, stdout) {
+            if (err) throw err;
+            assert.strictEqual(stdout, "function f(x){return function(){return x(function(a){return a*a})}}function g(op){return op(1)+op(2)}console.log(5==f(g)());\n");
+            done();
+        });
+    });
+    it("Should work with keep_fargs under mangler options", function(done) {
+        var command = uglifyjscmd + ' test/input/issue-1431/sample.js -m keep_fargs=true';
+        exec(command, function(err, stdout) {
+            if (err) throw err;
+            assert.strictEqual(stdout, "function f(x){return function(){function n(a){return a*a}return x(n)}}function g(op){return op(1)+op(2)}console.log(f(g)()==5);\n");
+            done();
+        });
+    });
     it("Should work with --keep-fnames (mangle only)", function(done) {
         var command = uglifyjscmd + ' test/input/issue-1431/sample.js --keep-fnames -m';
         exec(command, function(err, stdout) {
@@ -193,10 +238,10 @@ describe("bin/uglifyjs", function() {
         });
     });
     it("Should work with --keep-fnames (mangle & compress)", function(done) {
-        var command = uglifyjscmd + ' test/input/issue-1431/sample.js --keep-fnames -m -c unused=false';
+        var command = uglifyjscmd + ' test/input/issue-1431/sample.js --keep-fnames -m -c';
         exec(command, function(err, stdout) {
             if (err) throw err;
-            assert.strictEqual(stdout, "function f(r){return function(){function n(n){return n*n}return r(n)}}function g(n){return n(1)+n(2)}console.log(5==f(g)());\n");
+            assert.strictEqual(stdout, "function f(n){return function(){return n(function n(r){return r*r})}}function g(n){return n(1)+n(2)}console.log(5==f(g)());\n");
             done();
         });
     });
@@ -285,7 +330,7 @@ describe("bin/uglifyjs", function() {
             if (err) throw err;
             assert.strictEqual(stdout, [
                 "var bar=function(){function foo(bar){return bar}return foo}();",
-                "//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInRlc3QvaW5wdXQvaXNzdWUtMTMyMy9zYW1wbGUuanMiXSwibmFtZXMiOlsiYmFyIiwiZm9vIl0sIm1hcHBpbmdzIjoiQUFBQSxJQUFJQSxJQUFNLFdBQ04sU0FBU0MsSUFBS0QsS0FDVixPQUFPQSxJQUdYLE9BQU9DLElBTEQifQ==",
+                "//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInRlc3QvaW5wdXQvaXNzdWUtMTMyMy9zYW1wbGUuanMiXSwibmFtZXMiOlsiYmFyIiwiZm9vIl0sIm1hcHBpbmdzIjoiQUFBQSxJQUFJQSxJQUFNLFdBQ04sU0FBU0MsSUFBS0QsS0FDVixPQUFPQSxHQUNYLENBRUEsT0FBT0MsR0FDVixFQUFFIn0=",
                 "",
             ].join("\n"));
             var stderrLines = stderr.split("\n");
@@ -305,7 +350,7 @@ describe("bin/uglifyjs", function() {
             if (err) throw err;
             assert.strictEqual(stdout, [
                 "var Foo=function Foo(){console.log(1+2)};new Foo;var bar=function(){function foo(bar){return bar}return foo}();",
-                "//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInN0ZGluIiwidGVzdC9pbnB1dC9pc3N1ZS0xMzIzL3NhbXBsZS5qcyJdLCJuYW1lcyI6WyJGb28iLCJjb25zb2xlIiwibG9nIiwiYmFyIiwiZm9vIl0sIm1hcHBpbmdzIjoiQUFBQSxJQUFNQSxJQUFJLFNBQUVBLE1BQWNDLFFBQVFDLElBQUksRUFBRSxJQUFPLElBQUlGLElDQW5ELElBQUlHLElBQU0sV0FDTixTQUFTQyxJQUFLRCxLQUNWLE9BQU9BLElBR1gsT0FBT0MsSUFMRCJ9",
+                "//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInN0ZGluIiwidGVzdC9pbnB1dC9pc3N1ZS0xMzIzL3NhbXBsZS5qcyJdLCJuYW1lcyI6WyJGb28iLCJjb25zb2xlIiwibG9nIiwiYmFyIiwiZm9vIl0sIm1hcHBpbmdzIjoiQUFBQSxJQUFNQSxJQUFJLFNBQUVBLE1BQWNDLFFBQVFDLElBQUksRUFBRSxDQUFDLENBQUUsRUFBSSxJQUFJRixJQ0FuRCxJQUFJRyxJQUFNLFdBQ04sU0FBU0MsSUFBS0QsS0FDVixPQUFPQSxHQUNYLENBRUEsT0FBT0MsR0FDVixFQUFFIn0=",
                 "",
             ].join("\n"));
             var stderrLines = stderr.split("\n");
@@ -746,7 +791,7 @@ describe("bin/uglifyjs", function() {
             if (err) throw err;
             assert.strictEqual(stdout, [
                 '"use strict";var foo=function foo(x){return"foo "+x};console.log(foo("bar"));',
-                "//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbImluZGV4LmpzIl0sIm5hbWVzIjpbImZvbyIsIngiLCJjb25zb2xlIiwibG9nIl0sIm1hcHBpbmdzIjoiYUFBQSxJQUFJQSxJQUFNLFNBQU5BLElBQU1DLEdBQUEsTUFBSyxPQUFTQSxHQUN4QkMsUUFBUUMsSUFBSUgsSUFBSSJ9",
+                "//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbImluZGV4LmpzIl0sIm5hbWVzIjpbImZvbyIsIngiLCJjb25zb2xlIiwibG9nIl0sIm1hcHBpbmdzIjoiYUFBQSxJQUFJQSxJQUFNLFNBQU5BLElBQU1DLEdBQUEsTUFBSyxPQUFTQSxDQUFkLEVBQ1ZDLFFBQVFDLElBQUlILElBQUksS0FBSixDQUFaIn0=",
                 ""
             ].join("\n"));
             done();
@@ -769,7 +814,7 @@ describe("bin/uglifyjs", function() {
             if (err) throw err;
             assert.strictEqual(stdout, [
                 'function foo(){return function(){console.log("PASS")}}foo()();',
-                "//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInRlc3QvaW5wdXQvaXNzdWUtMjMxMC9pbnB1dC5qcyJdLCJuYW1lcyI6WyJmb28iLCJjb25zb2xlIiwibG9nIiwiZiJdLCJtYXBwaW5ncyI6IkFBQUEsU0FBU0EsTUFDTCxPQUFPLFdBQ0hDLFFBQVFDLElBQUksU0FLUkYsS0FDUkcifQ==",
+                "//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInRlc3QvaW5wdXQvaXNzdWUtMjMxMC9pbnB1dC5qcyJdLCJuYW1lcyI6WyJmb28iLCJjb25zb2xlIiwibG9nIl0sIm1hcHBpbmdzIjoiQUFBQSxTQUFTQSxNQUNMLE9BQU8sV0FDSEMsUUFBUUMsSUFBSSxNQUFNLENBQ3RCLENBQ0osQ0FHWUYsSUFBSSxFQUNWIn0=",
                 ""
             ].join("\n"));
             done();
@@ -897,6 +942,14 @@ describe("bin/uglifyjs", function() {
         exec(command, function(err, stdout, stderr) {
             if (err) throw err;
             assert.strictEqual(stdout, '(function(exports){(function(window,undefined){function enclose(){console.log("test enclose")}enclose()})(window)})(typeof exports=="undefined"?exports={}:exports);\n');
+            done();
+        });
+    });
+    it("Should work with --module", function(done) {
+        var command = uglifyjscmd + " test/input/module/input.js --module -mc";
+        exec(command, function(err, stdout, stderr) {
+            if (err) throw err;
+            assert.strictEqual(stdout, read("test/input/module/expect.js"));
             done();
         });
     });

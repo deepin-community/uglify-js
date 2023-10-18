@@ -12,7 +12,7 @@ concat_1: {
 
         var e = 1 + x() + 2 + "X" + 3 + "boo";
 
-        // be careful with concatentation with "\0" with octal-looking strings.
+        // be careful with concatenation with "\0" with octal-looking strings.
         var f = "\0" + 360 + "\0" + 8 + "\0";
     }
     expect: {
@@ -271,6 +271,23 @@ concat_9: {
         );
     }
     expect_stdout: true
+}
+
+concat_sequence: {
+    options = {
+        collapse_vars: true,
+        strings: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a;
+        console.log(12 + (a = null, "34" + a));
+    }
+    expect: {
+        console.log(12 + "34" + null);
+    }
+    expect_stdout: "1234null"
 }
 
 issue_3689: {

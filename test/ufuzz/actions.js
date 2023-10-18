@@ -2,15 +2,18 @@ var get = require("https").get;
 var parse = require("url").parse;
 
 var base, token, run_number;
+var expires = Date.now() + (6 * 60 - 10) * 60 * 1000;
 exports.init = function(url, auth, num) {
     base = url;
     token = auth;
     run_number = num;
 };
 exports.should_stop = function(callback) {
+    if (Date.now() > expires) return callback();
     read(base + "/actions/runs?per_page=100", function(reply) {
-        if (!reply || !Array.isArray(reply.workflow_runs)) return;
-        var runs = reply.workflow_runs.sort(function(a, b) {
+        var runs = verify(reply, "workflow_runs").filter(function(workflow) {
+            return workflow.status != "completed";
+        }).sort(function(a, b) {
             return b.run_number - a.run_number;
         });
         var found = false, remaining = 20;
@@ -19,15 +22,13 @@ exports.should_stop = function(callback) {
             do {
                 workflow = runs.pop();
                 if (!workflow) return;
-                if (is_cron(workflow) && workflow.run_number == run_number) found = true;
-            } while (!found && workflow.status == "completed");
+                if (!is_cron(workflow)) break;
+                if (workflow.run_number == run_number) found = true;
+            } while (!found);
             read(workflow.jobs_url, function(reply) {
-                if (!reply || !Array.isArray(reply.jobs)) return;
-                if (!reply.jobs.every(function(job) {
-                    if (job.status == "completed") return true;
-                    remaining--;
-                    return found || !is_cron(workflow);
-                })) return;
+                verify(reply, "jobs").forEach(function(job) {
+                    if (job.status != "completed") remaining--;
+                });
                 if (remaining >= 0) {
                     next();
                 } else {
@@ -68,5 +69,14 @@ function read(url, callback) {
         });
     }).on("error", function() {
         done();
+    });
+}
+
+function verify(reply, field) {
+    if (!reply) return [];
+    var values = reply[field];
+    if (!Array.isArray(values)) return [];
+    return values.filter(function(value) {
+        return value;
     });
 }

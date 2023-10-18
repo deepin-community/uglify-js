@@ -346,9 +346,7 @@ collapse_vars_if: {
             return "x" != "Bar" + x / 4 ? g9 : g5;
         }
         function f3(x) {
-            if (x)
-                return 1;
-            return 2;
+            return x ? 1 : 2;
         }
     }
 }
@@ -1912,6 +1910,42 @@ collapse_vars_regexp: {
     ]
 }
 
+collapse_arg_sequence: {
+    options = {
+        collapse_vars: true,
+        unused: true,
+    }
+    input: {
+        (function(a) {
+            a("foo");
+        })((console.log("bar"), console.log));
+    }
+    expect: {
+        (function(a) {
+            (0, console.log)("foo");
+        })(console.log("bar"));
+    }
+    expect_stdout: [
+        "bar",
+        "foo",
+    ]
+}
+
+collapse_for_init: {
+    options = {
+        collapse_vars: true,
+        toplevel: true,
+    }
+    input: {
+        for (var a = (Math, console), b = a.log("PASS"); b;);
+    }
+    expect: {
+        Math;
+        for (var a, b = console.log("PASS"); b;);
+    }
+    expect_stdout: "PASS"
+}
+
 issue_1537: {
     options = {
         collapse_vars: true,
@@ -2545,7 +2579,7 @@ side_effects_property: {
     expect_stdout: true
 }
 
-undeclared: {
+undeclared_1: {
     options = {
         collapse_vars: true,
         unused: true,
@@ -2560,8 +2594,68 @@ undeclared: {
     }
     expect: {
         function f(x, y) {
+            return (b = y) + x;
+        }
+    }
+}
+
+undeclared_2: {
+    options = {
+        collapse_vars: true,
+        unused: true,
+    }
+    input: {
+        function f(x, y) {
+            var a;
+            a = x;
             b = y;
-            return b + x;
+            return a + b;
+        }
+    }
+    expect: {
+        function f(x, y) {
+            return x + (b = y);
+        }
+    }
+}
+
+undeclared_3: {
+    options = {
+        collapse_vars: true,
+        unused: true,
+    }
+    input: {
+        function f(x, y) {
+            var a;
+            a = x;
+            b = y;
+            return b + a();
+        }
+    }
+    expect: {
+        function f(x, y) {
+            return (b = y) + x();
+        }
+    }
+}
+
+undeclared_4: {
+    options = {
+        collapse_vars: true,
+        unused: true,
+    }
+    input: {
+        function f(x, y) {
+            var a;
+            a = x;
+            b = y;
+            return a() + b;
+        }
+    }
+    expect: {
+        function f(x, y) {
+            b = y;
+            return x() + b;
         }
     }
 }
@@ -2665,6 +2759,24 @@ chained_4: {
         console.log(a, b);
     }
     expect_stdout: "foo undefined"
+}
+
+chained_5: {
+    options = {
+        collapse_vars: true,
+    }
+    input: {
+        var a = "PASS";
+        var a = (console, console.log(a));
+        a && ++a;
+    }
+    expect: {
+        var a = "PASS";
+        console;
+        var a;
+        (a = console.log(a)) && ++a;
+    }
+    expect_stdout: "PASS"
 }
 
 boolean_binary_1: {
@@ -2906,6 +3018,127 @@ compound_assignment_2: {
     expect_stdout: "4"
 }
 
+compound_assignment_3: {
+    options = {
+        collapse_vars: true,
+    }
+    input: {
+        var a = 1;
+        a += (console.log("PASS"), 2);
+        a.p;
+    }
+    expect: {
+        var a = 1;
+        (a += (console.log("PASS"), 2)).p;
+    }
+    expect_stdout: "PASS"
+}
+
+compound_assignment_4: {
+    options = {
+        collapse_vars: true,
+        evaluate: true,
+    }
+    input: {
+        A = "PASS";
+        var a = "";
+        a += (a = "FAIL", A);
+        a.p;
+        console.log(a);
+    }
+    expect: {
+        var a = "";
+        (a += (a = "FAIL", A = "PASS")).p;
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+}
+
+compound_assignment_5: {
+    options = {
+        collapse_vars: true,
+    }
+    input: {
+        var a = 0, b;
+        a += 42;
+        b && (a *= null);
+        console.log(a);
+    }
+    expect: {
+        var a = 0, b;
+        a += 42;
+        b && (a *= null);
+        console.log(a);
+    }
+    expect_stdout: "42"
+}
+
+compound_assignment_6: {
+    options = {
+        collapse_vars: true,
+    }
+    input: {
+        var a;
+        a ^= 6;
+        a *= a + 1;
+        console.log(a);
+    }
+    expect: {
+        var a;
+        a = (a ^= 6) * (a + 1);
+        console.log(a);
+    }
+    expect_stdout: "42"
+}
+
+compound_assignment_7: {
+    options = {
+        assignments: true,
+        collapse_vars: true,
+        reduce_vars: true,
+        toplevel: true,
+    }
+    input: {
+        var a = "FA";
+        a = a + "I";
+        a = a + "L";
+        if (console)
+            a = "PASS";
+        console.log(a);
+    }
+    expect: {
+        var a = "FA";
+        a = a + "I" + "L";
+        if (console)
+            a = "PASS";
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+}
+
+compound_assignment_8: {
+    options = {
+        assignments: true,
+        collapse_vars: true,
+        reduce_vars: true,
+        toplevel: true,
+    }
+    input: {
+        var a = 2;
+        a = 3 * a;
+        a = 7 * a;
+        console || (a = "FAIL");
+        console.log(a);
+    }
+    expect: {
+        var a = 2;
+        a = a * 3 * 7;
+        console || (a = "FAIL");
+        console.log(a);
+    }
+    expect_stdout: "42"
+}
+
 issue_2187_1: {
     options = {
         collapse_vars: true,
@@ -3030,10 +3263,10 @@ issue_2203_2: {
             a: "FAIL",
             b: function() {
                 return function(c) {
-                    return (String, (Object, function() {
+                    return (Object, function() {
                         return this;
-                    }())).a;
-                }();
+                    }()).a;
+                }(String);
             }
         }.b());
     }
@@ -3731,6 +3964,7 @@ issue_2437_1: {
     options = {
         collapse_vars: true,
         conditionals: true,
+        if_return: true,
         inline: true,
         join_vars: true,
         passes: 2,
@@ -3763,17 +3997,17 @@ issue_2437_1: {
         console.log(foo());
     }
     expect: {
-        console.log(function() {
-            if (xhrDesc) {
-                var result = !!(req = new XMLHttpRequest()).onreadystatechange;
-                return Object.defineProperty(XMLHttpRequest.prototype, "onreadystatechange", xhrDesc || {}),
-                    result;
-            }
-            var req = new XMLHttpRequest(), detectFunc = function(){};
-            return req.onreadystatechange = detectFunc,
-            result = req[SYMBOL_FAKE_ONREADYSTATECHANGE_1] === detectFunc,
-            req.onreadystatechange = null, result;
-        }());
+        var req, detectFunc, result;
+        console.log((
+            xhrDesc ? (result = !!(req = new XMLHttpRequest).onreadystatechange,
+                Object.defineProperty(XMLHttpRequest.prototype, "onreadystatechange", xhrDesc||{})
+            ) : (
+                (req = new XMLHttpRequest).onreadystatechange = detectFunc = function(){},
+                result = req[SYMBOL_FAKE_ONREADYSTATECHANGE_1] === detectFunc,
+                req.onreadystatechange = null
+            ),
+            result
+        ));
     }
 }
 
@@ -3783,6 +4017,7 @@ issue_2437_2: {
         conditionals: true,
         inline: true,
         join_vars: true,
+        negate_iife: true,
         passes: 3,
         reduce_funcs: true,
         reduce_vars: true,
@@ -3813,15 +4048,15 @@ issue_2437_2: {
         foo();
     }
     expect: {
-        !function() {
-            if (xhrDesc)
-                return (req = new XMLHttpRequest()).onreadystatechange,
-                    Object.defineProperty(XMLHttpRequest.prototype, "onreadystatechange", xhrDesc || {});
-            var req = new XMLHttpRequest();
-            req.onreadystatechange = function(){},
+        var req;
+        xhrDesc ? (
+            (req = new XMLHttpRequest).onreadystatechange,
+            Object.defineProperty(XMLHttpRequest.prototype, "onreadystatechange", xhrDesc || {})
+        ) : (
+            (req = new XMLHttpRequest).onreadystatechange = function(){},
             req[SYMBOL_FAKE_ONREADYSTATECHANGE_1],
-            req.onreadystatechange = null;
-        }();
+            req.onreadystatechange = null
+        );
     }
 }
 
@@ -6443,7 +6678,8 @@ assign_undeclared: {
         console.log(typeof B);
     }
     expect: {
-        B = new (console.log(42), function() {})();
+        console.log(42);
+        B = new function() {}();
         console.log(typeof B);
     }
     expect_stdout: [
@@ -8156,9 +8392,9 @@ issue_3884_1: {
         console.log(a, b);
     }
     expect: {
-        var a = 100, b = 1;
-        b <<= ++a;
-        console.log(a, b);
+        var a = 100;
+        ++a;
+        console.log(a, 32);
     }
     expect_stdout: "101 32"
 }
@@ -8778,6 +9014,27 @@ collapse_and_assign: {
     expect_stdout: "PASS"
 }
 
+collapse_and_assign_property: {
+    options = {
+        collapse_vars: true,
+        pure_getters: "strict",
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        console.log(function f() {
+            f && (f.p = "PASS");
+            return f.p;
+        }());
+    }
+    expect: {
+        console.log(function f() {
+            return f.p = f ? "PASS" : f.p;
+        }());
+    }
+    expect_stdout: "PASS"
+}
+
 collapse_or_assign: {
     options = {
         collapse_vars: true,
@@ -8795,7 +9052,7 @@ collapse_or_assign: {
         var a = {
             p: "PASS",
         };
-        log(a = !a.q ? a.p : a);
+        log(a = a.q ? a: a.p);
     }
     expect_stdout: "PASS"
 }
@@ -9064,12 +9321,11 @@ issue_4874: {
         })(a = 42);
     }
     expect: {
-        var a;
         null;
         (function(b) {
-            for (var c in a && a[console.log("PASS")])
+            for (var c in 42, 42[console.log("PASS")])
                 console;
-        })(a = 42);
+        })();
     }
     expect_stdout: "PASS"
 }
@@ -9139,9 +9395,7 @@ issue_4908: {
         console.log(d[1]);
     }
     expect: {
-        var a = 0, b;
-        console || a++;
-        var c = a, d = [ (d = a) && d, d += 42 ];
+        var a = 0, b, c = (console || a++, a), d = [ (d = a) && d, d += 42 ];
         console.log(d[1]);
     }
     expect_stdout: "42"
@@ -9253,13 +9507,13 @@ issue_4920_2: {
         console.log(b);
     }
     expect: {
-        var o = {
+        var o;
+        var a = "PASS", b;
+        ({
             get PASS() {
                 a = "FAIL";
             },
-        };
-        var a = "PASS", b;
-        o[b = a];
+        })[b = a];
         console.log(b);
     }
     expect_stdout: "PASS"
@@ -9283,9 +9537,39 @@ issue_4920_3: {
     }
     expect: {
         var log = console.log;
-        var o = {
+        var o;
+        var a = "PASS", b;
+        ({
             get PASS() {
                 a = "FAIL";
+            },
+        })[b = a];
+        log(b);
+    }
+    expect_stdout: "PASS"
+}
+
+issue_4920_4: {
+    options = {
+        collapse_vars: true,
+        toplevel: true,
+    }
+    input: {
+        var log = console.log;
+        var o = {
+            get [(a = "FAIL 1", "PASS")]() {
+                a = "FAIL 2";
+            },
+        };
+        var a = "PASS", b;
+        o[b = a];
+        log(b);
+    }
+    expect: {
+        var log = console.log;
+        var o = {
+            get [(a = "FAIL 1", "PASS")]() {
+                a = "FAIL 2";
             },
         };
         var a = "PASS", b;
@@ -9293,6 +9577,7 @@ issue_4920_3: {
         log(b);
     }
     expect_stdout: "PASS"
+    node_version: ">=4"
 }
 
 issue_4935: {
@@ -9343,9 +9628,8 @@ inline_throw: {
     expect: {
         try {
             (function(a) {
-                return function() {
-                    throw a;
-                }();
+                throw a;
+                return;
             })("PASS");
         } catch (e) {
             console.log(e);
@@ -9481,4 +9765,359 @@ issue_5112_2: {
         }("FAIL 2"));
     }
     expect_stdout: "PASS"
+}
+
+issue_5182: {
+    options = {
+        arrows: true,
+        collapse_vars: true,
+        evaluate: true,
+        hoist_props: true,
+        inline: true,
+        merge_vars: true,
+        passes: 4,
+        reduce_vars: true,
+        sequences: true,
+        side_effects: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var con = console;
+        global.log = con.log;
+        var jump = function(x) {
+            console.log("JUMP:", x * 10);
+            return x + x;
+        };
+        var jump2 = jump;
+        var run = function(x) {
+            console.log("RUN:", x * -10);
+            return x * x;
+        };
+        var run2 = run;
+        var bar = (x, y) => {
+            console.log("BAR:", x + y);
+            return x - y;
+        };
+        var bar2 = bar;
+        var obj = {
+            foo: bar2,
+            go: run2,
+            not_used: jump2,
+        };
+        console.log(obj.foo(1, 2), global.log("PASS"));
+    }
+    expect: {
+        var con = console;
+        global.log = con.log,
+        console.log((console.log("BAR:", 3), -1), global.log("PASS"));
+    }
+    expect_stdout: [
+        "BAR: 3",
+        "PASS",
+        "-1 undefined",
+    ]
+    node_version: ">=4"
+}
+
+issue_5273: {
+    options = {
+        collapse_vars: true,
+        evaluate: true,
+        inline: true,
+        reduce_vars: true,
+        sequences: true,
+        toplevel: true,
+    }
+    input: {
+        var a = "10", b = 1;
+        function f(c, d) {
+            return d;
+        }
+        f((b += a, b *= a), f);
+        console.log(b);
+    }
+    expect: {
+        var a = "10", b = 1;
+        function f(c, d) {
+            return d;
+        }
+        b = 1100,
+        f,
+        console.log(b);
+    }
+    expect_stdout: "1100"
+}
+
+issue_5276: {
+    options = {
+        collapse_vars: true,
+        pure_getters: "strict",
+        reduce_vars: true,
+        toplevel: true,
+    }
+    input: {
+        var a = A = "PASS";
+        a.p += null;
+        a.p -= 42;
+        console.log(a);
+    }
+    expect: {
+        var a = A = "PASS";
+        a.p = a.p + null - 42;
+        console.log(a);
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5277: {
+    options = {
+        collapse_vars: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        console.log(function() {
+            var a = function() {
+                a += null;
+                a -= 42;
+            };
+        }());
+    }
+    expect: {
+        console.log(function() {}());
+    }
+    expect_stdout: "undefined"
+}
+
+issue_5309_1: {
+    options = {
+        collapse_vars: true,
+        conditionals: true,
+        toplevel: true,
+    }
+    input: {
+        if (console)
+            var a = (console.log("PASS"), b), b = a;
+        else
+            console.log("FAIL");
+    }
+    expect: {
+        var a, b;
+        console ? (console.log("PASS"), b = b) : console.log("FAIL");
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5309_2: {
+    options = {
+        collapse_vars: true,
+        toplevel: true,
+    }
+    input: {
+        var a, b;
+        console ? (a = (console.log("PASS"), b), b = a) : console.log("FAIL");
+    }
+    expect: {
+        var a, b;
+        console ? (console.log("PASS"), b = b) : console.log("FAIL");
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5394: {
+    options = {
+        collapse_vars: true,
+        evaluate: true,
+    }
+    input: {
+        try {
+            throw A.p = (console.log("FAIL"), []), !1;
+        } catch (e) {
+            console.log(typeof e);
+        }
+    }
+    expect: {
+        try {
+            throw !(A.p = (console.log("FAIL"), []));
+        } catch (e) {
+            console.log(typeof e);
+        }
+    }
+    expect_stdout: "object"
+}
+
+issue_5396: {
+    options = {
+        collapse_vars: true,
+        merge_vars: true,
+        reduce_vars: true,
+        side_effects: true,
+        unused: true,
+    }
+    input: {
+        var a, b;
+        function f() {}
+        b = 0;
+        new function g(c) {
+            var d = a && g(e), e = ++d, i = [ 42 ];
+            for (var j in i)
+                console.log("PASS"),
+                i;
+        }();
+    }
+    expect: {
+        var a, b;
+        function f() {}
+        b = 0;
+        (function g(c) {
+            a && g();
+            for (var j in [ 42 ])
+                console.log("PASS");
+        })();
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5568: {
+    options = {
+        collapse_vars: true,
+        evaluate: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        A = "FAIL";
+        var a = (A = "PASS", !1);
+        for (var b in a);
+        console.log(A);
+    }
+    expect: {
+        A = "FAIL";
+        for (var b in !(A = "PASS"));
+        console.log(A);
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5638_1: {
+    options = {
+        collapse_vars: true,
+        reduce_vars: true,
+        toplevel: true,
+    }
+    input: {
+        var a;
+        console;
+        a = [ 42 ];
+        console || FAIL(a);
+        console.log(a++);
+    }
+    expect: {
+        var a;
+        console;
+        a = [ 42 ];
+        console || FAIL(a);
+        console.log(a++);
+    }
+    expect_stdout: "42"
+}
+
+issue_5638_2: {
+    options = {
+        collapse_vars: true,
+        reduce_vars: true,
+        toplevel: true,
+    }
+    input: {
+        var a;
+        console;
+        a = [ 6 ];
+        console || FAIL(a);
+        console.log(a *= 7);
+    }
+    expect: {
+        var a;
+        console;
+        a = [ 6 ];
+        console || FAIL(a);
+        console.log(a *= 7);
+    }
+    expect_stdout: "42"
+}
+
+issue_5638_3: {
+    options = {
+        collapse_vars: true,
+        pure_getters: "strict",
+        reduce_vars: true,
+        toplevel: true,
+    }
+    input: {
+        var log = console.log;
+        var a = { foo: 42 }, b;
+        for (var k in a) {
+            b = a[k];
+            log(k || b, b++);
+        }
+    }
+    expect: {
+        var log = console.log;
+        var a = { foo: 42 }, b;
+        for (var k in a) {
+            b = a[k];
+            log(k || b, b++);
+        }
+    }
+    expect_stdout: "foo 42"
+}
+
+issue_5638_4: {
+    options = {
+        collapse_vars: true,
+        pure_getters: "strict",
+        reduce_vars: true,
+        toplevel: true,
+    }
+    input: {
+        var log = console.log;
+        var a = { foo: 6 }, b;
+        for (var k in a) {
+            b = a[k];
+            log(k || b, b *= 7);
+        }
+    }
+    expect: {
+        var log = console.log;
+        var a = { foo: 6 }, b;
+        for (var k in a) {
+            b = a[k];
+            log(k || b, b *= 7);
+        }
+    }
+    expect_stdout: "foo 42"
+}
+
+issue_5643: {
+    options = {
+        collapse_vars: true,
+        reduce_vars: true,
+        toplevel: true,
+    }
+    input: {
+        var a = 3, b;
+        a *= 7;
+        b = !!this;
+        console || console.log(b);
+        console.log(a * ++b);
+    }
+    expect: {
+        var a = 3, b;
+        a *= 7;
+        b = !!this;
+        console || console.log(b);
+        console.log(a * ++b);
+    }
+    expect_stdout: "42"
 }

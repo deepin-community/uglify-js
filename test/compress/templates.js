@@ -337,7 +337,7 @@ malformed_evaluate_4: {
         console.log("\\u00b5");
     }
     expect_stdout: "\\u00b5"
-    node_version: ">=8"
+    node_version: ">=8.10.0"
 }
 
 unsafe_evaluate: {
@@ -353,7 +353,7 @@ unsafe_evaluate: {
         console.log("\\uFo");
     }
     expect_stdout: "\\uFo"
-    node_version: ">=8"
+    node_version: ">=8.10.0"
 }
 
 side_effects_1: {
@@ -741,5 +741,31 @@ issue_5145_2: {
         "42",
         "",
     ]
+    node_version: ">=4"
+}
+
+issue_5199: {
+    options = {
+        collapse_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        var a = function() {
+            console.log(typeof b);
+        }``;
+        {
+            const b = a;
+        }
+    }
+    expect: {
+        var a = function() {
+            console.log(typeof b);
+        }``;
+        {
+            const b = a;
+        }
+    }
+    expect_stdout: "undefined"
     node_version: ">=4"
 }

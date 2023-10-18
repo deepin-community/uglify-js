@@ -1,6 +1,7 @@
 var assert = require("assert");
 var readFileSync = require("fs").readFileSync;
 var run_code = require("../sandbox").run_code;
+var semver = require("semver");
 var UglifyJS = require("../..");
 
 function read(path) {
@@ -109,10 +110,12 @@ describe("minify", function() {
             var result = UglifyJS.minify(code, {
                 compress: false,
                 mangle: {
-                    properties: true,
-                    toplevel: true
+                    properties: {
+                        domprops: true,
+                    },
+                    toplevel: true,
                 },
-                nameCache: cache
+                nameCache: cache,
             });
             if (result.error) throw result.error;
             original += code;
@@ -187,32 +190,30 @@ describe("minify", function() {
         it("Shouldn't mangle quoted properties", function() {
             var js = 'a["foo"] = "bar"; a.color = "red"; x = {"bar": 10};';
             var result = UglifyJS.minify(js, {
-                compress: {
-                    properties: false
-                },
+                compress: true,
                 mangle: {
                     properties: {
-                        keep_quoted: true
-                    }
+                        domprops: true,
+                        keep_quoted: true,
+                    },
                 },
                 output: {
                     keep_quoted_props: true,
-                    quote_style: 3
-                }
+                    quote_style: 3,
+                },
             });
-            assert.strictEqual(result.code,
-                    'a["foo"]="bar",a.a="red",x={"bar":10};');
+            assert.strictEqual(result.code, 'a["foo"]="bar",a.a="red",x={"bar":10};');
         });
         it("Should not mangle quoted property within dead code", function() {
-            var result = UglifyJS.minify('({ "keep": 1 }); g.keep = g.change;', {
+            var result = UglifyJS.minify('({ "keep": 1 }); g.keep = g.change = 42;', {
                 mangle: {
                     properties: {
-                        keep_quoted: true
-                    }
-                }
+                        keep_quoted: true,
+                    },
+                },
             });
             if (result.error) throw result.error;
-            assert.strictEqual(result.code, "g.keep=g.g;");
+            assert.strictEqual(result.code, "g.keep=g.g=42;");
         });
     });
 
@@ -317,6 +318,24 @@ describe("minify", function() {
             });
             assert.ok(stat.body);
             assert.strictEqual(stat.print_to_string(), "a=x()");
+        });
+    });
+
+    describe("module", function() {
+        it("Should not inline `await` variables", function() {
+            if (semver.satisfies(process.version, "<8")) return;
+            var code = [
+                "console.log(function() {",
+                "    return typeof await;",
+                "}());",
+            ].join("\n");
+            assert.strictEqual(run_code("(async function(){" + code + "})();"), "undefined\n");
+            var result = UglifyJS.minify(code, {
+                module: true,
+            });
+            if (result.error) throw result.error;
+            assert.strictEqual(result.code, "console.log(function(){return typeof await}());");
+            assert.strictEqual(run_code("(async function(){" + result.code + "})();"), "undefined\n");
         });
     });
 

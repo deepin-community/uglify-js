@@ -82,14 +82,14 @@ ifs_3_should_warn: {
         "WARN: Boolean && always false [test/compress/conditionals.js:3,12]",
         "WARN: Condition left of && always false [test/compress/conditionals.js:3,12]",
         "WARN: Condition always false [test/compress/conditionals.js:3,12]",
+        "WARN: Dropping side-effect-free statement [test/compress/conditionals.js:3,12]",
         "WARN: Dropping unreachable code [test/compress/conditionals.js:3,34]",
         "WARN: + in boolean context always true [test/compress/conditionals.js:10,19]",
         "WARN: Boolean || always true [test/compress/conditionals.js:10,12]",
         "WARN: Condition left of || always true [test/compress/conditionals.js:10,12]",
         "WARN: Condition always true [test/compress/conditionals.js:10,12]",
-        "WARN: Dropping unreachable code [test/compress/conditionals.js:12,15]",
-        "WARN: Dropping side-effect-free statement [test/compress/conditionals.js:3,12]",
         "WARN: Dropping side-effect-free statement [test/compress/conditionals.js:10,12]",
+        "WARN: Dropping unreachable code [test/compress/conditionals.js:12,15]",
     ]
 }
 
@@ -194,6 +194,241 @@ ifs_7: {
         if (!A) while (C);
         if (A) while (B); else while (C);
     }
+}
+
+merge_tail_1: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        function f(a) {
+            var b = "foo";
+            if (a) {
+                while (console.log("bar"));
+                console.log(b);
+            } else {
+                while (console.log("baz"));
+                console.log(b);
+            }
+        }
+        f();
+        f(42);
+    }
+    expect: {
+        function f(a) {
+            var b = "foo";
+            if (a)
+                while (console.log("bar"));
+            else
+                while (console.log("baz"));
+            console.log(b);
+        }
+        f();
+        f(42);
+    }
+    expect_stdout: [
+        "baz",
+        "foo",
+        "bar",
+        "foo",
+    ]
+}
+
+merge_tail_2: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        function f(a) {
+            var b = "foo";
+            if (a) {
+                while (console.log("bar"));
+                console.log(b);
+            } else {
+                c = "baz";
+                while (console.log(c));
+                while (console.log("bar"));
+                console.log(b);
+                var c;
+            }
+        }
+        f();
+        f(42);
+    }
+    expect: {
+        function f(a) {
+            var b = "foo";
+            if (!a) {
+                c = "baz";
+                while (console.log(c));
+                var c;
+            }
+            while (console.log("bar"));
+            console.log(b);
+        }
+        f();
+        f(42);
+    }
+    expect_stdout: [
+        "baz",
+        "bar",
+        "foo",
+        "bar",
+        "foo",
+    ]
+}
+
+merge_tail_3: {
+    options = {
+        conditionals: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        (function(a, b) {
+            if (b = a.shift())
+                console.log(b);
+            else {
+                if (b = a.shift())
+                    while (console.log("foo"));
+                console.log(b);
+            }
+        })([ false, "bar" ]);
+    }
+    expect: {
+        (function(a, b) {
+            if (!(b = a.shift()) && (b = a.shift()))
+                while (console.log("foo"));
+            console.log(b);
+        })([ false, "bar" ]);
+    }
+    expect_stdout: [
+        "foo",
+        "bar",
+    ]
+}
+
+merge_tail_sequence_1: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        function f(a) {
+            var b = "foo";
+            if (a) {
+                while (console.log("bar"));
+                console.log(b);
+            } else {
+                c = "baz";
+                while (console.log(c));
+                console.log("bar"),
+                console.log(b);
+                var c;
+            }
+        }
+        f();
+        f(42);
+    }
+    expect: {
+        function f(a) {
+            var b = "foo";
+            if (a)
+                while (console.log("bar"));
+            else {
+                c = "baz";
+                while (console.log(c));
+                console.log("bar");
+                var c;
+            }
+            console.log(b);
+        }
+        f();
+        f(42);
+    }
+    expect_stdout: [
+        "baz",
+        "bar",
+        "foo",
+        "bar",
+        "foo",
+    ]
+}
+
+merge_tail_sequence_2: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        function f(a) {
+            var b = "foo";
+            if (a) {
+                console.log("bar");
+                console.log(b);
+            } else {
+                c = "baz";
+                while (console.log(c));
+                console.log("bar"),
+                console.log(b);
+                var c;
+            }
+        }
+        f();
+        f(42);
+    }
+    expect: {
+        function f(a) {
+            var b = "foo";
+            if (!a) {
+                c = "baz";
+                while (console.log(c));
+                var c;
+            }
+            console.log("bar");
+            console.log(b);
+        }
+        f();
+        f(42);
+    }
+    expect_stdout: [
+        "baz",
+        "bar",
+        "foo",
+        "bar",
+        "foo",
+    ]
+}
+
+merge_tail_sequence_3: {
+    options = {
+        conditionals: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        (function(a, b) {
+            if (b = a.shift())
+                console.log("foo"),
+                console.log(b);
+            else {
+                if (b = a.shift())
+                    while (console.log("bar"));
+                console.log(b);
+            }
+        })([ false, "baz" ]);
+    }
+    expect: {
+        (function(a, b) {
+            if (b = a.shift())
+                console.log("foo");
+            else if (b = a.shift())
+                while (console.log("bar"));
+            console.log(b);
+        })([ false, "baz" ]);
+    }
+    expect_stdout: [
+        "bar",
+        "baz",
+    ]
 }
 
 cond_1: {
@@ -1004,6 +1239,52 @@ trivial_boolean_ternary_expressions : {
     }
 }
 
+extendscript_1: {
+    beautify = {
+        extendscript: true,
+    }
+    input: {
+        var alert = console.log;
+        function f(a, b) {
+            return a ? b ? "foo" : "bar" : "baz";
+        }
+        alert(f());
+        alert(f(42));
+        alert(f(null, true));
+        alert(f([], {}));
+    }
+    expect_exact: 'var alert=console.log;function f(a,b){return a?(b?"foo":"bar"):"baz"}alert(f());alert(f(42));alert(f(null,true));alert(f([],{}));'
+    expect_stdout: [
+        "baz",
+        "bar",
+        "baz",
+        "foo",
+    ]
+}
+
+extendscript_2: {
+    beautify = {
+        extendscript: true,
+    }
+    input: {
+        var alert = console.log;
+        function f(a, b) {
+            return a ? "foo" : b ? "bar" : "baz";
+        }
+        alert(f());
+        alert(f(42));
+        alert(f(null, true));
+        alert(f([], {}));
+    }
+    expect_exact: 'var alert=console.log;function f(a,b){return a?"foo":(b?"bar":"baz")}alert(f());alert(f(42));alert(f(null,true));alert(f([],{}));'
+    expect_stdout: [
+        "baz",
+        "foo",
+        "bar",
+        "foo",
+    ]
+}
+
 issue_1154: {
     options = {
         booleans: true,
@@ -1259,6 +1540,398 @@ condition_matches_alternative: {
         console.log(foo({ p: 3 }, [ null ]), foo({ p: 0 }, [ 7 ]), foo({ p: true } , [ false ]), bar());
     }
     expect_stdout: "null 0 false 5"
+}
+
+condition_sequence_1: {
+    options = {
+        conditionals: true,
+        sequences: true,
+    }
+    input: {
+        function f(x, y) {
+            return (console.log(x), x) ? x : y;
+        }
+        console.log(f("foo", "bar"));
+        console.log(f(null, "baz"));
+        console.log(f(42));
+        console.log(f());
+    }
+    expect: {
+        function f(x, y) {
+            return console.log(x), x || y;
+        }
+        console.log(f("foo", "bar")),
+        console.log(f(null, "baz")),
+        console.log(f(42)),
+        console.log(f());
+    }
+    expect_stdout: [
+        "foo",
+        "foo",
+        "null",
+        "baz",
+        "42",
+        "42",
+        "undefined",
+        "undefined",
+    ]
+}
+
+condition_sequence_2: {
+    options = {
+        conditionals: true,
+        sequences: true,
+    }
+    input: {
+        function f(x, y) {
+            return (console.log(y), y) ? x : y;
+        }
+        console.log(f("foo", "bar"));
+        console.log(f(null, "baz"));
+        console.log(f(42));
+        console.log(f());
+    }
+    expect: {
+        function f(x, y) {
+            return console.log(y), y && x;
+        }
+        console.log(f("foo", "bar")),
+        console.log(f(null, "baz")),
+        console.log(f(42)),
+        console.log(f());
+    }
+    expect_stdout: [
+        "bar",
+        "foo",
+        "baz",
+        "null",
+        "undefined",
+        "undefined",
+        "undefined",
+        "undefined",
+    ]
+}
+
+combine_tail_sequence: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        var n = {
+            f: function() {
+                console.log("foo");
+                return this.p;
+            },
+            p: "FAIL 1",
+        };
+        var o = {
+            f: function() {
+                console.log("foz");
+                return this.p;
+            },
+            p: "FAIL 2",
+        };
+        var p = "PASS";
+        function g(a) {
+            return a
+                ? (console.log("baa"), (console.log("bar"), (console.log("baz"), n).f)())
+                : (console.log("moo"), (console.log("mor"), (console.log("moz"), o).f)());
+        }
+        console.log(g());
+        console.log(g(42));
+    }
+    expect: {
+        var n = {
+            f: function() {
+                console.log("foo");
+                return this.p;
+            },
+            p: "FAIL 1",
+        };
+        var o = {
+            f: function() {
+                console.log("foz");
+                return this.p;
+            },
+            p: "FAIL 2",
+        };
+        var p = "PASS";
+        function g(a) {
+            return (0, (a
+                ? (console.log("baa"), console.log("bar"), console.log("baz"), n)
+                : (console.log("moo"), console.log("mor"), console.log("moz"), o)).f)();
+        }
+        console.log(g());
+        console.log(g(42));
+    }
+    expect_stdout: [
+        "moo",
+        "mor",
+        "moz",
+        "foz",
+        "PASS",
+        "baa",
+        "bar",
+        "baz",
+        "foo",
+        "PASS",
+    ]
+}
+
+consequent_sequence_1: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        function f(x, y, a) {
+            return x ? (console.log("seq"), y && a) : a;
+        }
+        console.log(f(false, false, 1));
+        console.log(f(false, true, 2));
+        console.log(f(true, false, 3));
+        console.log(f(true, true, 4));
+    }
+    expect: {
+        function f(x, y, a) {
+            return (!x || (console.log("seq"), y)) && a;
+        }
+        console.log(f(false, false, 1));
+        console.log(f(false, true, 2));
+        console.log(f(true, false, 3));
+        console.log(f(true, true, 4));
+    }
+    expect_stdout: [
+        "1",
+        "2",
+        "seq",
+        "false",
+        "seq",
+        "4",
+    ]
+}
+
+consequent_sequence_2: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        function f(x, y, a) {
+            return x ? (console.log("seq"), y || a) : a;
+        }
+        console.log(f(false, false, 1));
+        console.log(f(false, true, 2));
+        console.log(f(true, false, 3));
+        console.log(f(true, true, 4));
+    }
+    expect: {
+        function f(x, y, a) {
+            return x && (console.log("seq"), y) || a;
+        }
+        console.log(f(false, false, 1));
+        console.log(f(false, true, 2));
+        console.log(f(true, false, 3));
+        console.log(f(true, true, 4));
+    }
+    expect_stdout: [
+        "1",
+        "2",
+        "seq",
+        "3",
+        "seq",
+        "true",
+    ]
+}
+
+consequent_sequence_3: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        function f(x, y, a, b) {
+            return x ? (console.log("seq"), y ? a : b) : b;
+        }
+        console.log(f(false, false, 1, -1));
+        console.log(f(false, true, 2, -2));
+        console.log(f(true, false, 3, -3));
+        console.log(f(true, true, 4, -4));
+    }
+    expect: {
+        function f(x, y, a, b) {
+            return x && (console.log("seq"), y) ? a : b;
+        }
+        console.log(f(false, false, 1, -1));
+        console.log(f(false, true, 2, -2));
+        console.log(f(true, false, 3, -3));
+        console.log(f(true, true, 4, -4));
+    }
+    expect_stdout: [
+        "-1",
+        "-2",
+        "seq",
+        "-3",
+        "seq",
+        "4",
+    ]
+}
+
+consequent_sequence_4: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        function f(x, y, a, b) {
+            return x ? (console.log("seq"), y ? a : b) : a;
+        }
+        console.log(f(false, false, 1, -1));
+        console.log(f(false, true, 2, -2));
+        console.log(f(true, false, 3, -3));
+        console.log(f(true, true, 4, -4));
+    }
+    expect: {
+        function f(x, y, a, b) {
+            return !x || (console.log("seq"), y) ? a : b;
+        }
+        console.log(f(false, false, 1, -1));
+        console.log(f(false, true, 2, -2));
+        console.log(f(true, false, 3, -3));
+        console.log(f(true, true, 4, -4));
+    }
+    expect_stdout: [
+        "1",
+        "2",
+        "seq",
+        "-3",
+        "seq",
+        "4",
+    ]
+}
+
+alternative_sequence_1: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        function f(x, y, a) {
+            return x ? a : (console.log("seq"), y && a);
+        }
+        console.log(f(false, false, 1));
+        console.log(f(false, true, 2));
+        console.log(f(true, false, 3));
+        console.log(f(true, true, 4));
+    }
+    expect: {
+        function f(x, y, a) {
+            return (x || (console.log("seq"), y)) && a;
+        }
+        console.log(f(false, false, 1));
+        console.log(f(false, true, 2));
+        console.log(f(true, false, 3));
+        console.log(f(true, true, 4));
+    }
+    expect_stdout: [
+        "seq",
+        "false",
+        "seq",
+        "2",
+        "3",
+        "4",
+    ]
+}
+
+alternative_sequence_2: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        function f(x, y, a) {
+            return x ? a : (console.log("seq"), y || a);
+        }
+        console.log(f(false, false, 1));
+        console.log(f(false, true, 2));
+        console.log(f(true, false, 3));
+        console.log(f(true, true, 4));
+    }
+    expect: {
+        function f(x, y, a) {
+            return !x && (console.log("seq"), y) || a;
+        }
+        console.log(f(false, false, 1));
+        console.log(f(false, true, 2));
+        console.log(f(true, false, 3));
+        console.log(f(true, true, 4));
+    }
+    expect_stdout: [
+        "seq",
+        "1",
+        "seq",
+        "true",
+        "3",
+        "4",
+    ]
+}
+
+alternative_sequence_3: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        function f(x, y, a, b) {
+            return x ? a : (console.log("seq"), y ? a : b);
+        }
+        console.log(f(false, false, 1, -1));
+        console.log(f(false, true, 2, -2));
+        console.log(f(true, false, 3, -3));
+        console.log(f(true, true, 4, -4));
+    }
+    expect: {
+        function f(x, y, a, b) {
+            return x || (console.log("seq"), y) ? a : b;
+        }
+        console.log(f(false, false, 1, -1));
+        console.log(f(false, true, 2, -2));
+        console.log(f(true, false, 3, -3));
+        console.log(f(true, true, 4, -4));
+    }
+    expect_stdout: [
+        "seq",
+        "-1",
+        "seq",
+        "2",
+        "3",
+        "4",
+    ]
+}
+
+alternative_sequence_4: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        function f(x, y, a, b) {
+            return x ? b : (console.log("seq"), y ? a : b);
+        }
+        console.log(f(false, false, 1, -1));
+        console.log(f(false, true, 2, -2));
+        console.log(f(true, false, 3, -3));
+        console.log(f(true, true, 4, -4));
+    }
+    expect: {
+        function f(x, y, a, b) {
+            return !x && (console.log("seq"), y) ? a : b;
+        }
+        console.log(f(false, false, 1, -1));
+        console.log(f(false, true, 2, -2));
+        console.log(f(true, false, 3, -3));
+        console.log(f(true, true, 4, -4));
+    }
+    expect_stdout: [
+        "seq",
+        "-1",
+        "seq",
+        "2",
+        "-3",
+        "-4",
+    ]
 }
 
 delete_conditional_1: {
@@ -1731,7 +2404,7 @@ issue_3576: {
     expect_stdout: "PASS"
 }
 
-issue_3668: {
+issue_3668_1: {
     options = {
         conditionals: true,
         if_return: true,
@@ -1752,10 +2425,43 @@ issue_3668: {
         function f() {
             try {
                 var undefined = typeof f;
+                if (!f) return undefined;
+            } catch (e) {
+                return "FAIL";
+            }
+        }
+        console.log(f());
+    }
+    expect_stdout: "undefined"
+}
+
+issue_3668_2: {
+    options = {
+        conditionals: true,
+        if_return: true,
+    }
+    input: {
+        function f() {
+            try {
+                var undefined = typeof f;
+                if (!f) return undefined;
+                return;
+            } catch (e) {
+                return "FAIL";
+            }
+            FAIL;
+        }
+        console.log(f());
+    }
+    expect: {
+        function f() {
+            try {
+                var undefined = typeof f;
                 return f ? void 0 : undefined;
             } catch (e) {
                 return "FAIL";
             }
+            FAIL;
         }
         console.log(f());
     }
@@ -1923,4 +2629,442 @@ object_super: {
     }
     expect_stdout: "PASS"
     node_version: ">=4"
+}
+
+issue_5232_1: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        (function() {
+            if (Math) {
+                function f() {}
+                for (var a in [ 42 ])
+                    console.log(typeof f);
+            } else {
+                var b = null;
+                return true;
+            }
+        })();
+    }
+    expect: {
+        (function() {
+            var b;
+            if (!Math)
+                return b = null, true;
+            function f() {}
+            for (var a in [ 42 ]) console.log(typeof f);
+        })();
+    }
+    expect_stdout: "function"
+}
+
+issue_5232_2: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        console.log(function() {
+            if (!Math);
+            else {
+                var b = null;
+                return "PASS";
+            }
+        }());
+    }
+    expect: {
+        console.log(function() {
+            var b;
+            if (Math)
+                return b = null, "PASS";
+        }());
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5232_3: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        console.log(function() {
+            return function() {
+                if (console)
+                    console.log("PASS");
+                else {
+                    var a = null;
+                    return "FAIL";
+                }
+            };
+        }()());
+    }
+    expect: {
+        console.log(function() {
+            return function() {
+                var a;
+                if (!console)
+                    return a = null, "FAIL";
+                console.log("PASS");
+            };
+        }()());
+    }
+    expect_stdout: [
+        "PASS",
+        "undefined",
+    ]
+}
+
+issue_5334_1: {
+    options = {
+        conditionals: true,
+        hoist_props: true,
+        reduce_vars: true,
+        side_effects: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        function f() {
+            if (console.log("PASS"))
+                var o = true, o = {
+                    p: o += console.log("FAIL"),
+                };
+        }
+        f();
+    }
+    expect: {
+        (function() {
+            var o;
+            console.log("PASS") && (o = true, o = {
+                p: o += console.log("FAIL"),
+            });
+        })();
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5334_2: {
+    options = {
+        conditionals: true,
+        hoist_props: true,
+        inline: true,
+        passes: 3,
+        reduce_vars: true,
+        side_effects: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        function f() {
+            if (console.log("PASS"))
+                var o = true, o = {
+                    p: o += console.log("FAIL"),
+                };
+        }
+        f();
+    }
+    expect: {
+        console.log("PASS") && console.log("FAIL");
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5544_1: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        var a;
+        if (a)
+            switch (42) {
+              case console.log("FAIL"):
+              case console:
+            }
+        else
+            switch (false) {
+              case console.log("PASS"):
+              case console:
+            }
+    }
+    expect: {
+        var a;
+        if (a)
+            switch (42) {
+              case console.log("FAIL"):
+              case console:
+            }
+        else
+            switch (false) {
+              case console.log("PASS"):
+              case console:
+            }
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5544_2: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        var a;
+        if (a)
+            switch (42) {
+              case console.log("FAIL"):
+              case console:
+            }
+        else
+            switch (42) {
+              case console.log("PASS"):
+              case console:
+            }
+    }
+    expect: {
+        var a;
+        if (a)
+            switch (42) {
+              case console.log("FAIL"):
+              case console:
+            }
+        else
+            switch (42) {
+              case console.log("PASS"):
+              case console:
+            }
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5546_1: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        var a;
+        if (a)
+            try {
+                console;
+            } finally {
+                console.log("FAIL");
+            }
+        else
+            try {
+                console;
+            } finally {
+                console.log("PASS");
+            }
+    }
+    expect: {
+        var a;
+        if (a)
+            try {
+                console;
+            } finally {
+                console.log("FAIL");
+            }
+        else
+            try {
+                console;
+            } finally {
+                console.log("PASS");
+            }
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5546_2: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        var a;
+        if (a)
+            try {
+                console;
+            } catch (e) {}
+        else
+            try {
+                console;
+            } finally {
+                console.log("PASS");
+            }
+    }
+    expect: {
+        var a;
+        if (a)
+            try {
+                console;
+            } catch (e) {}
+        else
+            try {
+                console;
+            } finally {
+                console.log("PASS");
+            }
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5546_3: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        var a;
+        if (a)
+            try {
+                FAIL;
+            } catch (e) {
+                console.log("FAIL");
+            }
+        else
+            try {
+                FAIL;
+            } catch (e) {
+                console.log("PASS");
+            }
+    }
+    expect: {
+        var a;
+        if (a)
+            try {
+                FAIL;
+            } catch (e) {
+                console.log("FAIL");
+            }
+        else
+            try {
+                FAIL;
+            } catch (e) {
+                console.log("PASS");
+            }
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5666_1: {
+    options = {
+        conditionals: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        var a;
+        (function() {
+            var b = a;
+            a ? a = b : (b++, a = b);
+        })();
+        console.log(a);
+    }
+    expect: {
+        var a;
+        (function() {
+            var b = a;
+            a = (a ? 0 : b++, b);
+        })();
+        console.log(a);
+    }
+    expect_stdout: "NaN"
+}
+
+issue_5666_2: {
+    options = {
+        conditionals: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        var a = "foo";
+        (function() {
+            var b = a;
+            a ? (b++, a = b) : a = b;
+        })();
+        console.log(a);
+    }
+    expect: {
+        var a = "foo";
+        (function() {
+            var b = a;
+            a = (a ? b++ : 0, b);
+        })();
+        console.log(a);
+    }
+    expect_stdout: "NaN"
+}
+
+issue_5673_1: {
+    options = {
+        conditionals: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        var a = "PASS", b = null;
+        console.log(function(c) {
+            return c || (b ? c : (c = a) && c);
+        }());
+    }
+    expect: {
+        var a = "PASS", b = null;
+        console.log(function(c) {
+            return c || (b || (c = a)) && c;
+        }());
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5673_2: {
+    options = {
+        conditionals: true,
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        var a = "PASS";
+        console.log(function(b) {
+            return (b = a) ? b : (b = a) && b;
+        }());
+    }
+    expect: {
+        var a = "PASS";
+        console.log(function(b) {
+            return a || (b = a) && b;
+        }());
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5694: {
+    options = {
+        conditionals: true,
+    }
+    input: {
+        FORCE_EXEC = "async()=>{}";
+        var a = "foo";
+        // Node.js v0.12~6 (vm): foo
+        console.log((NaN = a) ? NaN : 42);
+    }
+    expect: {
+        FORCE_EXEC = "async()=>{}";
+        var a = "foo";
+        console.log((NaN = a) ? NaN : 42);
+    }
+    expect_stdout: "NaN"
+}
+
+issue_5712: {
+    options = {
+        booleans: true,
+        conditionals: true,
+        evaluate: true,
+    }
+    input: {
+        var a = 0;
+        a || (++a).toString() && a && console.log("PASS");
+    }
+    expect: {
+        var a = 0;
+        a || (++a).toString() && a && console.log("PASS");
+    }
+    expect_stdout: "PASS"
 }

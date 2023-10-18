@@ -409,6 +409,15 @@ drop_toplevel_retain: {
         a = 2;
         console.log(3);
     }
+    expect_stdout: "3"
+    expect_warnings: [
+        "INFO: Retaining variable a",
+        "INFO: Retaining variable f",
+        "INFO: Dropping unused variable b [test/compress/drop-unused.js:1,15]",
+        "INFO: Dropping unused variable c [test/compress/drop-unused.js:1,22]",
+        "INFO: Dropping unused function g [test/compress/drop-unused.js:8,17]",
+        "WARN: Dropping unused function h [test/compress/drop-unused.js:9,17]",
+    ]
 }
 
 drop_toplevel_retain_array: {
@@ -442,6 +451,15 @@ drop_toplevel_retain_array: {
         a = 2;
         console.log(3);
     }
+    expect_stdout: "3"
+    expect_warnings: [
+        "INFO: Retaining variable a",
+        "INFO: Retaining variable f",
+        "INFO: Dropping unused variable b [test/compress/drop-unused.js:1,15]",
+        "INFO: Dropping unused variable c [test/compress/drop-unused.js:1,22]",
+        "INFO: Dropping unused function g [test/compress/drop-unused.js:8,17]",
+        "WARN: Dropping unused function h [test/compress/drop-unused.js:9,17]",
+    ]
 }
 
 drop_toplevel_retain_regex: {
@@ -471,6 +489,15 @@ drop_toplevel_retain_regex: {
         a = 2;
         console.log(3);
     }
+    expect_stdout: "3"
+    expect_warnings: [
+        "INFO: Retaining variable a",
+        "INFO: Retaining variable f",
+        "INFO: Dropping unused variable b [test/compress/drop-unused.js:1,15]",
+        "INFO: Dropping unused variable c [test/compress/drop-unused.js:1,22]",
+        "INFO: Dropping unused function g [test/compress/drop-unused.js:8,17]",
+        "WARN: Dropping unused function h [test/compress/drop-unused.js:9,17]",
+    ]
 }
 
 drop_toplevel_all_retain: {
@@ -501,6 +528,15 @@ drop_toplevel_all_retain: {
         a = 2;
         console.log(3);
     }
+    expect_stdout: "3"
+    expect_warnings: [
+        "INFO: Retaining variable a",
+        "INFO: Retaining variable f",
+        "INFO: Dropping unused variable b [test/compress/drop-unused.js:1,15]",
+        "INFO: Dropping unused variable c [test/compress/drop-unused.js:1,22]",
+        "INFO: Dropping unused function g [test/compress/drop-unused.js:8,17]",
+        "WARN: Dropping unused function h [test/compress/drop-unused.js:9,17]",
+    ]
 }
 
 drop_toplevel_funcs_retain: {
@@ -532,6 +568,12 @@ drop_toplevel_funcs_retain: {
         function g() {}
         console.log(b = 3);
     }
+    expect_stdout: "3"
+    expect_warnings: [
+        "INFO: Retaining variable a",
+        "INFO: Retaining variable f",
+        "WARN: Dropping unused function h [test/compress/drop-unused.js:9,17]",
+    ]
 }
 
 drop_toplevel_vars_retain: {
@@ -564,6 +606,13 @@ drop_toplevel_vars_retain: {
         function h() {}
         console.log(3);
     }
+    expect_stdout: "3"
+    expect_warnings: [
+        "INFO: Retaining variable a",
+        "INFO: Retaining variable f",
+        "INFO: Dropping unused variable b [test/compress/drop-unused.js:1,15]",
+        "INFO: Dropping unused variable c [test/compress/drop-unused.js:1,22]",
+    ]
 }
 
 drop_toplevel_keep_assign: {
@@ -669,6 +718,76 @@ iife: {
             b;
         }
     }
+}
+
+drop_instanceof: {
+    options = {
+        booleans: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        function f() {}
+        console.log({} instanceof f, Math instanceof f);
+    }
+    expect: {
+        console.log(!1, (Math, !1));
+    }
+    expect_stdout: "false false"
+}
+
+keep_instanceof_1: {
+    options = {
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        function f() {}
+        var f;
+        console.log({} instanceof f, Math instanceof f);
+    }
+    expect: {
+        function f() {}
+        var f;
+        console.log({} instanceof f, Math instanceof f);
+    }
+    expect_stdout: "false false"
+}
+
+keep_instanceof_2: {
+    options = {
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        function f() {}
+        var f = Object;
+        console.log({} instanceof f, Math instanceof f);
+    }
+    expect: {
+        function f() {}
+        var f = Object;
+        console.log({} instanceof f, Math instanceof f);
+    }
+    expect_stdout: "true true"
+}
+
+keep_instanceof_3: {
+    options = {
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        f = Object;
+        function f() {}
+        console.log({} instanceof f, Math instanceof f);
+    }
+    expect: {
+        f = Object;
+        function f() {}
+        console.log({} instanceof f, Math instanceof f);
+    }
+    expect_stdout: "true true"
 }
 
 issue_1539: {
@@ -1233,8 +1352,11 @@ issue_2105_2: {
 issue_2105_3: {
     options = {
         inline: true,
-        passes: 2,
+        join_vars: true,
+        passes: 3,
         reduce_vars: true,
+        side_effects: true,
+        sequences: true,
         unused: true,
     }
     input: {
@@ -1258,12 +1380,12 @@ issue_2105_3: {
         });
     }
     expect: {
-        !void void {
+        ({
             prop: function() {
-                console.log;
-                void console.log("PASS");
-            }
-        }.prop();
+                console.log,
+                console.log("PASS");
+            },
+        }).prop();
     }
     expect_stdout: "PASS"
 }
@@ -1728,7 +1850,8 @@ issue_2768: {
     }
     expect: {
         var a = "FAIL";
-        var c = (d = a, void (d && (a = "PASS")));
+        d = a;
+        var c = void (d && (a = "PASS"));
         var d;
         console.log(a, typeof c);
     }
@@ -1755,7 +1878,7 @@ issue_2846: {
         var c = function(a, b) {
             a = 0;
             b && b(a);
-            return a++;
+            return +a;
         }();
         console.log(c);
     }
@@ -1765,7 +1888,7 @@ issue_2846: {
 issue_805_1: {
     options = {
         inline: true,
-        passes: 2,
+        passes: 3,
         pure_getters: "strict",
         reduce_vars: true,
         sequences: true,
@@ -1798,7 +1921,7 @@ issue_805_1: {
 issue_805_2: {
     options = {
         inline: true,
-        passes: 2,
+        passes: 3,
         pure_getters: "strict",
         reduce_vars: true,
         sequences: true,
@@ -2382,7 +2505,8 @@ issue_3664: {
     }
     expect: {
         console.log(function() {
-            var a, b = (a = (a = [ b && console.log("FAIL") ]).p = 0, 0);
+            a = (a = [ b && console.log("FAIL") ]).p = 0;
+            var a, b = 0;
             return "PASS";
         }());
     }
@@ -2551,10 +2675,9 @@ issue_3899: {
         console.log(typeof a);
     }
     expect: {
-        function a() {
+        console.log(typeof function() {
             return 2;
-        }
-        console.log(typeof a);
+        });
     }
     expect_stdout: "function"
 }
@@ -2652,7 +2775,7 @@ issue_3956: {
         collapse_vars: true,
         evaluate: true,
         inline: true,
-        passes: 2,
+        passes: 3,
         reduce_vars: true,
         sequences: true,
         side_effects: true,
@@ -2783,7 +2906,7 @@ issue_3986: {
     expect_stdout: "0"
 }
 
-issue_4017: {
+issue_4017_1: {
     options = {
         pure_getters: "strict",
         reduce_vars: true,
@@ -2801,7 +2924,31 @@ issue_4017: {
         var a = 0;
         console.log(function() {
             c &= 0;
-            var c;
+            var c = a++ + (A = a);
+        }());
+    }
+    expect_stdout: "undefined"
+}
+
+issue_4017_2: {
+    options = {
+        passes: 2,
+        pure_getters: "strict",
+        reduce_vars: true,
+        unused: true,
+    }
+    input: {
+        var a = 0;
+        console.log(function f() {
+            var b = c &= 0;
+            var c = a++ + (A = a);
+            var d = c && c[f];
+        }());
+    }
+    expect: {
+        var a = 0;
+        console.log(function() {
+            0;
             a++,
             A = a;
         }());
@@ -2829,14 +2976,12 @@ issue_4025: {
         console.log(a, b, d);
     }
     expect: {
-        var c = 0;
         try {
-            console.log(c);
+            console.log(0);
         } finally {
-            var d = c + 1;
-            c = 0;
+            0;
         }
-        console.log(1, 1, d);
+        console.log(1, 1, 1);
     }
     expect_stdout: [
         "0",
@@ -2916,7 +3061,7 @@ issue_4133: {
         console.log(a);
     }
     expect: {
-        var b = 1;
+        var a = 1;
         console.log(0);
     }
     expect_stdout: "0"
@@ -3062,7 +3207,7 @@ issue_4184: {
     expect_stdout: "42"
 }
 
-issue_4235: {
+issue_4235_1: {
     options = {
         inline: true,
         reduce_vars: true,
@@ -3081,9 +3226,33 @@ issue_4235: {
     }
     expect: {
         void function() {
-            var f;
-            console.log(f);
+            var f = console.log(f);
         }();
+    }
+    expect_stdout: "undefined"
+}
+
+issue_4235_2: {
+    options = {
+        inline: true,
+        passes: 2,
+        reduce_vars: true,
+        side_effects: true,
+        unused: true,
+        varify: true,
+    }
+    input: {
+        (function() {
+            {
+                const f = 0;
+            }
+            (function f() {
+                var f = console.log(f);
+            })();
+        })();
+    }
+    expect: {
+        console.log(void 0);
     }
     expect_stdout: "undefined"
 }
@@ -3220,7 +3389,7 @@ issue_4558_1: {
     expect: {
         var a = 0;
         var b = c >>>= a;
-        var c;
+        var c = 0;
         b && a++,
         console.log(a);
     }
@@ -3306,6 +3475,7 @@ issue_4806_1: {
 issue_4806_2: {
     options = {
         sequences: true,
+        side_effects: true,
         toplevel: true,
         unused: true,
     }
@@ -3489,6 +3659,158 @@ issue_5079: {
         do {
             0, 0, null;
         } while (console.log("PASS"));
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5224: {
+    options = {
+        evaluate: true,
+        keep_fargs: false,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        function f() {
+            try {
+                var b = function() {
+                    var a = "FAIL 1";
+                    null && a;
+                    a = console.log(a);
+                }(new function(c, d) {
+                    console.log(d);
+                    a;
+                }("FAIL 2", Infinity));
+            } finally {
+                return f;
+            }
+        }
+        f();
+    }
+    expect: {
+        (function f() {
+            try {
+                (function() {
+                    var a = "FAIL 1";
+                    null;
+                    console.log(a);
+                })(function() {
+                    console.log(1 / 0);
+                    a;
+                }());
+            } finally {
+                return f;
+            }
+        })();
+    }
+    expect_stdout: "Infinity"
+}
+
+issue_5271: {
+    options = {
+        evaluate: true,
+        reduce_vars: true,
+        toplevel: true,
+        unused: true,
+    }
+    input: {
+        function f() {
+            do {
+                var a = b = 0 ^ f, b = b;
+            } while (console.log(42 - b));
+        }
+        f();
+    }
+    expect: {
+        (function f() {
+            do {
+                var b;
+                b = 0 ^ f;
+            } while (console.log(42 - b));
+        })();
+    }
+    expect_stdout: "42"
+}
+
+issue_5533_keep_fargs: {
+    options = {
+        evaluate: true,
+        inline: true,
+        join_vars: true,
+        keep_fargs: true,
+        loops: true,
+        side_effects: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        try {
+            (function() {
+                var a;
+                for (; 1;)
+                    a = function() {
+                        (function f(b) {
+                            b;
+                            throw "PASS";
+                        })();
+                    }();
+            })();
+        } catch (e) {
+            console.log(e);
+        }
+    }
+    expect: {
+        "use strict";
+        try {
+            (function() {
+                for (;;)
+                    throw "PASS";
+            })();
+        } catch (e) {
+            console.log(e);
+        }
+    }
+    expect_stdout: "PASS"
+}
+
+issue_5533_drop_fargs: {
+    options = {
+        evaluate: true,
+        inline: true,
+        join_vars: true,
+        keep_fargs: false,
+        loops: true,
+        side_effects: true,
+        unused: true,
+    }
+    input: {
+        "use strict";
+        try {
+            (function() {
+                var a;
+                for (; 1;)
+                    a = function() {
+                        (function f(b) {
+                            b;
+                            throw "PASS";
+                        })();
+                    }();
+            })();
+        } catch (e) {
+            console.log(e);
+        }
+    }
+    expect: {
+        "use strict";
+        try {
+            (function() {
+                for (;;)
+                    throw "PASS";
+            })();
+        } catch (e) {
+            console.log(e);
+        }
     }
     expect_stdout: "PASS"
 }
